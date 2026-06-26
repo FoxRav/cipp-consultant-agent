@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Protocol
@@ -13,7 +14,9 @@ from cipp_contracts.config import database_url
 
 
 MIGRATION_PATH = Path(__file__).resolve().parents[3] / "db" / "migrations" / "008_knowledge_graph.sql"
+GUIDANCE_MIGRATION_PATH = Path(__file__).resolve().parents[3] / "db" / "migrations" / "009_legal_guidance_documents.sql"
 EXTRACTION_METHOD = "structured_postgres_v0.4"
+GUIDANCE_EXTRACTION_METHOD = "legal_guidance_postgres_v0.6"
 
 
 @dataclass(frozen=True)
@@ -268,6 +271,7 @@ class MemoryGraphStore:
 
 def ensure_schema(conn: psycopg.Connection[Any]) -> None:
     conn.execute(MIGRATION_PATH.read_text(encoding="utf-8"))
+    conn.execute(GUIDANCE_MIGRATION_PATH.read_text(encoding="utf-8"))
 
 
 def prune_project(conn: psycopg.Connection[Any], project_code: str) -> None:
@@ -284,6 +288,230 @@ def build_graph_from_dataset(store: GraphStore, data: dict[str, list[dict[str, A
     section_document: dict[str, str] = {}
     section_project: dict[str, str] = {}
     scope_by_contract_system: dict[tuple[str, str], tuple[str, str]] = {}
+
+    for doc in data.get("guidance_documents", []):
+        doc_key = _key("guidance_document", doc["id"])
+        _entity(
+            store,
+            stats,
+            EntitySpec(
+                "guidance_document",
+                doc_key,
+                doc["title"],
+                display_name=doc["title"],
+                source_table="legal.guidance_documents",
+                source_id=_id(doc),
+                metadata={
+                    "document_code": doc.get("document_code"),
+                    "source_type": doc.get("source_type"),
+                    "authority_level": doc.get("authority_level"),
+                    "binding_status": doc.get("binding_status"),
+                    "legal_role": doc.get("legal_role"),
+                    "user_facing_role": doc.get("user_facing_role"),
+                },
+                evidence=EvidenceRef(
+                    "legal.guidance_documents",
+                    _id(doc),
+                    source_file_id=_str(doc.get("source_file_id")),
+                    evidence_note="Non-binding expert guidance document.",
+                ),
+            ),
+        )
+
+    for section in data.get("guidance_sections", []):
+        doc_key = _key("guidance_document", section["guidance_document_id"])
+        section_key = _key("guidance_section", section["id"])
+        evidence = EvidenceRef(
+            "legal.guidance_sections",
+            _id(section),
+            source_file_id=_str(section.get("source_file_id")),
+            evidence_note="Guidance section row.",
+        )
+        _entity(
+            store,
+            stats,
+            EntitySpec(
+                "guidance_section",
+                section_key,
+                section.get("title") or section.get("section_number") or _id(section),
+                source_table="legal.guidance_sections",
+                source_id=_id(section),
+                metadata={
+                    "section_number": section.get("section_number"),
+                    "page_start": section.get("page_start"),
+                    "page_end": section.get("page_end"),
+                    "binding_status": "not_binding_law",
+                },
+                evidence=evidence,
+            ),
+        )
+        _relation(
+            store,
+            stats,
+            RelationSpec(
+                ("guidance_document", doc_key),
+                "HAS_SECTION",
+                ("guidance_section", section_key),
+                extraction_method=GUIDANCE_EXTRACTION_METHOD,
+                evidence=evidence,
+            ),
+        )
+
+    stage_keys: set[str] = set()
+    legal_ref_keys: set[str] = set()
+    for item in data.get("guidance_items", []):
+        doc_key = _key("guidance_document", item["guidance_document_id"])
+        item_key = _key("guidance_item", item["id"])
+        item_type = item.get("item_type")
+        entity_type = "guidance_item"
+        if item_type == "decision_point":
+            entity_type = "decision_point"
+        elif item_type == "risk_warning":
+            entity_type = "risk_warning"
+        elif item_type == "legal_cross_reference":
+            entity_type = "legal_cross_reference"
+        evidence = EvidenceRef(
+            "legal.guidance_items",
+            _id(item),
+            source_file_id=_str(item.get("source_file_id")),
+            page_id=_str(item.get("page_id")),
+            quote_text=item.get("guidance_summary"),
+            evidence_note="Rules-first non-binding guidance item.",
+            confidence=float(item.get("confidence") or 1.0),
+        )
+        _entity(
+            store,
+            stats,
+            EntitySpec(
+                entity_type,
+                item_key,
+                item.get("guidance_summary") or _id(item),
+                source_table="legal.guidance_items",
+                source_id=_id(item),
+                metadata={
+                    "item_type": item_type,
+                    "topic_code": item.get("topic_code"),
+                    "process_stage": item.get("process_stage"),
+                    "actor": item.get("actor"),
+                    "binding_status": item.get("binding_status"),
+                    "authority_level": "non_binding_guidance",
+                    "source_type": "expert_guidance",
+                    "legal_relevance": item.get("legal_relevance"),
+                },
+                evidence=evidence,
+            ),
+        )
+        _relation(
+            store,
+            stats,
+            RelationSpec(
+                ("guidance_document", doc_key),
+                "HAS_GUIDANCE_ITEM",
+                (entity_type, item_key),
+                extraction_method=GUIDANCE_EXTRACTION_METHOD,
+                evidence=evidence,
+            ),
+        )
+        if item.get("section_id"):
+            _relation(
+                store,
+                stats,
+                RelationSpec(
+                    ("guidance_section", _key("guidance_section", item["section_id"])),
+                    "HAS_GUIDANCE_ITEM",
+                    (entity_type, item_key),
+                    extraction_method=GUIDANCE_EXTRACTION_METHOD,
+                    evidence=evidence,
+                ),
+            )
+        if item.get("process_stage"):
+            stage_key = _key("process_stage", item["process_stage"])
+            if stage_key not in stage_keys:
+                _entity(
+                    store,
+                    stats,
+                    EntitySpec(
+                        "process_stage",
+                        stage_key,
+                        item["process_stage"],
+                        metadata={"source_type": "expert_guidance"},
+                    ),
+                )
+                stage_keys.add(stage_key)
+            _relation(
+                store,
+                stats,
+                RelationSpec(
+                    (entity_type, item_key),
+                    "APPLIES_TO_STAGE",
+                    ("process_stage", stage_key),
+                    extraction_method=GUIDANCE_EXTRACTION_METHOD,
+                    evidence=evidence,
+                ),
+            )
+        if item.get("topic_code"):
+            stage_value = item.get("process_stage") or "general_guidance"
+            stage_key = _key("process_stage", stage_value)
+            if stage_key not in stage_keys:
+                _entity(
+                    store,
+                    stats,
+                    EntitySpec(
+                        "process_stage",
+                        stage_key,
+                        stage_value,
+                        metadata={"source_type": "expert_guidance"},
+                    ),
+                )
+                stage_keys.add(stage_key)
+            _relation(
+                store,
+                stats,
+                RelationSpec(
+                    (entity_type, item_key),
+                    "GUIDES",
+                    ("process_stage", stage_key),
+                    extraction_method=GUIDANCE_EXTRACTION_METHOD,
+                    metadata={"topic_code": item.get("topic_code")},
+                    evidence=evidence,
+                ),
+            )
+        for legal_ref in _legal_refs_from_item(item):
+            ref_key = _key("legal_cross_reference", legal_ref)
+            if ref_key not in legal_ref_keys:
+                _entity(
+                    store,
+                    stats,
+                    EntitySpec(
+                        "legal_cross_reference",
+                        ref_key,
+                        legal_ref,
+                        metadata={"cross_reference_status": "mentioned_not_verified"},
+                    ),
+                )
+                legal_ref_keys.add(ref_key)
+            _relation(
+                store,
+                stats,
+                RelationSpec(
+                    (entity_type, item_key),
+                    "MENTIONS_LEGAL_SOURCE",
+                    ("legal_cross_reference", ref_key),
+                    extraction_method=GUIDANCE_EXTRACTION_METHOD,
+                    evidence=evidence,
+                ),
+            )
+            _relation(
+                store,
+                stats,
+                RelationSpec(
+                    ("legal_cross_reference", ref_key),
+                    "NEEDS_VERIFICATION_FROM_LAW",
+                    ("legal_cross_reference", ref_key),
+                    extraction_method=GUIDANCE_EXTRACTION_METHOD,
+                    evidence=evidence,
+                ),
+            )
 
     for project in data.get("projects", []):
         project_key = _key("project", project["project_code"])
@@ -659,6 +887,9 @@ def fetch_dataset(conn: psycopg.Connection[Any], project_code: str | None = None
         "events": _ops_rows(conn, "ops.project_events", projects),
         "handover_records": _ops_rows(conn, "ops.handover_records", projects),
         "observations": _ops_rows(conn, "ops.project_observations", projects),
+        "guidance_documents": _guidance_documents(conn) if not project_code else [],
+        "guidance_sections": _guidance_sections(conn) if not project_code else [],
+        "guidance_items": _guidance_items(conn) if not project_code else [],
     }
 
 
@@ -706,6 +937,43 @@ def _ops_rows(conn: psycopg.Connection[Any], table: str, projects: list[dict[str
         return []
     codes = [project["project_code"] for project in projects]
     return _fetch(conn, f"SELECT * FROM {table} WHERE project_code = ANY(%s)", (codes,))
+
+
+def _guidance_documents(conn: psycopg.Connection[Any]) -> list[dict[str, Any]]:
+    if not _table_exists(conn, "legal.guidance_documents"):
+        return []
+    return _fetch(conn, "SELECT * FROM legal.guidance_documents ORDER BY document_code")
+
+
+def _guidance_sections(conn: psycopg.Connection[Any]) -> list[dict[str, Any]]:
+    if not _table_exists(conn, "legal.guidance_sections"):
+        return []
+    return _fetch(
+        conn,
+        """
+        SELECT gs.*, gd.source_file_id
+        FROM legal.guidance_sections gs
+        JOIN legal.guidance_documents gd ON gd.id = gs.guidance_document_id
+        ORDER BY gd.document_code, gs.page_start, gs.section_number
+        """,
+    )
+
+
+def _guidance_items(conn: psycopg.Connection[Any]) -> list[dict[str, Any]]:
+    if not _table_exists(conn, "legal.guidance_items"):
+        return []
+    return _fetch(conn, "SELECT * FROM legal.guidance_items ORDER BY page_number, item_type, id")
+
+
+def _legal_refs_from_item(item: dict[str, Any]) -> list[str]:
+    metadata = item.get("metadata") or {}
+    if isinstance(metadata, str):
+        try:
+            metadata = json.loads(metadata)
+        except json.JSONDecodeError:
+            metadata = {}
+    values = metadata.get("legal_references") if isinstance(metadata, dict) else []
+    return [str(value) for value in values or []]
 
 
 def _table_exists(conn: psycopg.Connection[Any], table: str) -> bool:

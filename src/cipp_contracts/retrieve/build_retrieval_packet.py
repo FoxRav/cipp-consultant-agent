@@ -136,6 +136,47 @@ TOPIC_RULES: dict[str, dict[str, Any]] = {
         "entity_types": ("unit_price", "payment_item", "contract", "clause"),
         "relation_types": ("CONTAINS", "SUPPORTED_BY", "HAS_CLAUSE"),
     },
+    "expert_guidance": {
+        "keywords": (
+            "hankesuunnittelu",
+            "suunnittelu",
+            "yhtiökokous",
+            "hallitus",
+            "osakas",
+            "osakkaiden",
+            "tarjouspyyntö",
+            "urakkatarjous",
+            "urakkatarjouksia",
+            "sukitusvaihtoehto",
+            "kuntotutkimus",
+            "koejyrsintä",
+            "pinnoitus",
+            "tiedottaminen",
+            "turvallisuuskoordinaattori",
+            "kosteudenhallinta",
+            "amatööritoimija",
+            "putkiremontti",
+        ),
+        "entity_types": (
+            "guidance_document",
+            "guidance_section",
+            "guidance_item",
+            "decision_point",
+            "risk_warning",
+            "legal_cross_reference",
+            "process_stage",
+        ),
+        "relation_types": (
+            "HAS_GUIDANCE_ITEM",
+            "APPLIES_TO_STAGE",
+            "GUIDES",
+            "HAS_DECISION_POINT",
+            "HAS_RISK_WARNING",
+            "MENTIONS_LEGAL_SOURCE",
+            "SUPPORTS_USER_ANSWER",
+            "NEEDS_VERIFICATION_FROM_LAW",
+        ),
+    },
 }
 
 DEFAULT_ENTITY_TYPES = (
@@ -149,6 +190,9 @@ DEFAULT_ENTITY_TYPES = (
     "handover",
     "defect",
     "warranty_issue",
+    "guidance_item",
+    "decision_point",
+    "risk_warning",
 )
 USER_CASE_FIELDS = (
     "apartments_count",

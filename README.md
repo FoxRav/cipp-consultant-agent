@@ -186,6 +186,18 @@ cipp-build-knowledge-graph --project-code reference_001 --prune
 
 Jokaiselle entitylle tai relaatiolle pyritään tallentamaan evidence `kg.evidence`-tauluun esimerkiksi `source_table/source_id`-, `source_file_id`-, `section_id`- tai `clause_id`-viitteellä. Tätä PostgreSQL-native KG:tä käytetään myöhemmin GraphRAG-/hybrid retrieval -vaiheessa rajaamaan ja perustelemaan hakuja, mutta graafiin ei tallenneta suhteita ilman jäljitettävää alkuperää.
 
+## Legal guidance documents
+
+Repo tukee myös lakiosan alla käsiteltäviä asiantuntijaoppaita, jotka eivät ole lakeja, asetuksia, YSE-ehtoja tai sopimuksia. Ensimmäinen tällainen aineisto on Jari Virran `Taloyhtiön putkiremonttiopas`, joka tuodaan luokalla `source_type=expert_guidance`, `authority_level=non_binding_guidance` ja `binding_status=not_binding_law`.
+
+Tätä aineistoa käytetään taloyhtiön hallituksen, osakkaan ja muun amatööritoimijan prosessiohjaukseen: lähtötiedot, kuntotutkimukset, hankesuunnittelu, päätöspisteet, tarjouspyynnöt, vastaanotto ja takuu. Se ei syrjäytä varsinaista lakia, asetusta, YSE-ehtoa, urakkasopimusta tai tarjouspyyntöä. Jos oppaassa mainitaan laki tai asetus, maininta tallennetaan `legal_cross_reference`-tyyppisenä ja statuksella `mentioned_not_verified`, kunnes varsinainen normilähde linkitetään.
+
+```powershell
+cipp-import-legal-guidance-pdf --file data/raw/legal_guidance/virta_putkiremonttiopas_2020/Putkiremonttiopas_4p_lores.pdf --document-code putkiremonttiopas_virta_2020 --title "Taloyhtiön putkiremonttiopas" --author "Jari Virta" --publisher "Kiinteistöalan Kustannus Oy" --publication-year 2020 --edition "4. painos"
+```
+
+Importer purkaa sivuviitteet `raw.pages`-kerrokseen, tunnistaa päälukurakenteen ja tallentaa sääntöpohjaiset `legal.guidance_items`-rivit. Raportit ja PDF pysyvät `data/`-kansiossa eivätkä kuulu git-committeihin.
+
 ## User-case retrieval packet
 
 Järjestelmä ei ole referenssiprojektien kyselybotti. Käyttäjä kysyy omaa taloyhtiötään tai yleistä CIPP-sukitusurakkaa koskevan kysymyksen. Referenssiprojektit ovat sisäinen, anonymisoitu grounding-aineisto.
@@ -213,6 +225,7 @@ Packetin `answer_scope` on `general_cipp_user_case`. `reference_usage.mode` on `
 
 ```powershell
 cipp-report-retrieval-smoke-matrix --output data/reports/retrieval_smoke_matrix.json --output-md data/reports/retrieval_smoke_matrix.md
+cipp-report-retrieval-smoke-matrix --include-guidance-topics --output data/reports/retrieval_smoke_matrix_guidance.json --output-md data/reports/retrieval_smoke_matrix_guidance.md
 ```
 
 Raportti laskee jokaiselle aiheelle `pass`, `partial` tai `fail` -tilan sekä matrix-tason `release_candidate`-arvon. `partial` voi olla hyväksyttävä esimerkiksi vastaanotto-, takuu- tai videotarkastusaiheessa, jos raportti kertoo selkeän syyn eikä anonymisointitarkistus löydä vuotoja. Tämä ei ole agenttivastaus, vaan retrieval-valmiuden testi.
@@ -233,3 +246,5 @@ cipp-compose-answer --retrieval-packet data/reports/retrieval_packet.json --outp
 - `insufficient_evidence`: lähdekatkelmia ei ole riittävästi turvalliseen vastaukseen
 
 Lähteet näytetään `reference_001`-tyyppisinä anonymisoituina viitteinä. Composer käyttää samoja sanitointisääntöjä kuin retrieval-paketti ja redaktoi esimerkiksi raakadatapolkuja, dokumenttinimiä, henkilötietoja ja varomattomia rahamääriä. `llm_used` on tässä vaiheessa aina `false`.
+
+Jos vastaus perustuu expert guidance -aineistoon, composer näyttää lähdeluokan `expert_guidance` ja lisää epävarmuuden: sitova oikeudellinen tulkinta pitää varmistaa varsinaisesta lakitekstistä, yhtiöjärjestyksestä, sopimuksesta tai asiantuntijalta. Käyttäjälle sopiva muoto on “Oppaan mukaan” tai “Asiantuntijaohjeen perusteella”, ei “laki määrää”.

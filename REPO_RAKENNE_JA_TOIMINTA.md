@@ -744,13 +744,37 @@ Rakentaa PostgreSQL:n sisäisen tietograafin olemassa olevista relaatiotauluista
 Mitä se tekee:
 
 - varmistaa `kg`-skeeman olemassaolon migraatiosta `db/migrations/008_knowledge_graph.sql`
+- varmistaa myös non-binding guidance -taulut migraatiosta `db/migrations/009_legal_guidance_documents.sql`
 - lukee projektit, sopimukset, osapuolet, asiakirjat, dokumenttiosiot, ehdot, urakkasisällöt, viemärisegmentit, vaatimukset, maksuerät, vakuudet, vakuutukset, operatiiviset tapahtumat, vastaanotot ja havainnot
+- lukee lisäksi `legal.guidance_documents`-, `legal.guidance_sections`- ja `legal.guidance_items`-rivit
 - lukee myös valinnaiset `quality.inspections`- ja `quality.defects`-taulut, jos ne ovat kannassa olemassa
 - muodostaa niistä `kg.entities`- ja `kg.relations`-rivit
 - tallentaa jokaiselle entitylle tai relaatiolle lähdejäljen `kg.evidence`-tauluun
 - toimii idempotentisti, eli sama ajo päivittää olemassa olevat solmut ja suhteet eikä monista niitä
 
 Tämä builder ei käytä LLM:ää eikä arvaa puuttuvia suhteita. Jos suhteelle ei löydy rakenteista riviä tai lähdejälkeä, sitä ei rakenneta.
+
+### `src/cipp_contracts/legal/import_guidance_pdf.py`
+
+Tuo lakiosan alla käsiteltävän, mutta ei-sitovan asiantuntijaoppaan tietokantaan.
+
+Nykyinen käyttötapa on Jari Virran `Taloyhtiön putkiremonttiopas`, joka luokitellaan näin:
+
+- `source_type = expert_guidance`
+- `authority_level = non_binding_guidance`
+- `binding_status = not_binding_law`
+- `legal_role = planning_and_decision_guidance`
+
+Mitä se tekee:
+
+- rekisteröi PDF:n `raw.source_files`-tauluun dokumenttityypillä `legal_guidance_pipe_renovation`
+- purkaa sivut `raw.pages`-tauluun ja säilyttää sivunumerot
+- tunnistaa päälukurakenteen `legal.guidance_sections`-tauluun
+- poimii sääntöpohjaisesti `legal.guidance_items`-rivejä signaaleista kuten `kannattaa`, `pitää`, `on syytä`, `edellyttää`, `riski`, `soveltuu` ja `ei sovellu`
+- luokittelee itemit process stage-, topic-, actor- ja item type -kenttiin
+- tallentaa lakimaininnat `legal_cross_reference`-itemeiksi statuksella `mentioned_not_verified`
+
+Tämä importer ei käytä LLM:ää eikä tee sitovia oikeudellisia väitteitä. Oppaan tarkoitus on antaa amatööritoimijalle prosessi- ja tarkistuslistaohjausta ennen kuin järjestelmä viittaa varsinaisiin lakeihin, YSE-ehtoihin, urakkasopimukseen tai tarjouspyyntöön.
 
 ## 13. Retrieve: käyttäjäkysymyksen aineistopaketti
 
@@ -768,6 +792,7 @@ Tärkeä tuoterajaus:
 Mitä se tekee:
 
 - tunnistaa kysymyksestä aiheen deterministisesti, esimerkiksi maksuerät, urakkarajat, JV/SV-segmentit, videotarkastuksen, vastaanoton, takuun tai lisätyöt
+- tunnistaa myös expert guidance -kysymykset, kuten hankesuunnittelu, yhtiökokous, hallitus, osakkaat, kuntotutkimus, koejyrsintä, pinnoitus, sukitusvaihtoehdot, turvallisuuskoordinaattori ja kosteudenhallinta
 - tallentaa käyttäjän taloyhtiön vihjeet `user_case`-osioon, esimerkiksi asuntojen määrän, pystylinjojen määrän ja pohjaviemärin mukanaolon
 - hakee aiheen mukaiset `kg.entities`-solmut ja 1-hop `kg.relations`-suhteet
 - hakee `kg.evidence`-rivit
@@ -777,6 +802,7 @@ Mitä se tekee:
 - kertoo coverage-tilan kentällä `evidence_coverage_status`: `ok`, `partial`, `weak` tai `no_text_context`
 - merkitsee entity-, relation- ja evidence-riveille `text_context_status`-arvon, kuten `direct_clause`, `direct_section`, `direct_page`, `source_file_page`, `entity_source_fallback`, `topic_text_fallback` tai `missing`
 - anonymisoi referenssien käytön `reference_001`-tyyppisiksi sisäisiksi lähteiksi
+- palauttaa guidance-lähteet asiantuntijaohjeina, ei lakilähteinä
 - palauttaa JSON- ja Markdown-muotoisen retrieval-paketin
 
 Tämä on v0.5.0-kehityslinjan retrieval-vaihe. Se ei ole vielä agenttivastaus: myöhempi hybrid RAG / GraphRAG -vastauslogiikka käyttää tätä pakettia vastauksen aineistona.
@@ -789,6 +815,7 @@ Mitä se tekee:
 
 - ajaa 10 vakioitua CIPP-aihetta nykyisen `build_retrieval_packet.py`-logiikan läpi
 - aiheet ovat maksuerät, JV, SV, urakkarajat, videotarkastus, vastaanotto, takuu, vakuudet/vakuutukset, lisätyöt/yksikköhinnat ja puutteet/reklamaatiot
+- optiona `--include-guidance-topics` lisää 10 putkiremonttioppaan prosessiohjauksen smoke-kysymystä
 - mittaa per aihe `retrieval_status`-, `evidence_coverage_status`-, tekstikonteksti-, evidence- ja reference usage -luvut
 - antaa jokaiselle aiheelle `topic_status`-arvon: `pass`, `partial` tai `fail`
 - laskee matrix-tason `release_candidate`-arvon
@@ -811,6 +838,7 @@ Mitä se tekee:
 - näyttää `missing_user_case_fields`-kentän käyttäjälle näkyvinä puuttuvina tietoina
 - näyttää epävarmuudet, jos retrieval tai evidence coverage ei ole täysin kunnossa
 - näyttää lähteet vain anonymisoituina `reference_001`-tyyppisinä viitteinä
+- merkitsee expert guidance -lähteet lähdeluokalla `expert_guidance`
 - käyttää retrievalin sanitointisääntöjä ja redaktoi myös varomattomat rahamäärät vastauksista
 
 `answer_status` voi olla:
@@ -820,6 +848,8 @@ Mitä se tekee:
 - `insufficient_evidence`: lähdekatkelmia ei ole riittävästi turvalliseen vastaukseen
 
 Tämä moduuli ei ole täysi agentti. Se ei keskustele, suunnittele uutta tiedonhakua eikä muodosta vapaata LLM-vastausta. `generation_mode` on `deterministic_source_grounded` ja `llm_used` on aina `false`.
+
+Kun vastaus perustuu asiantuntijaoppaaseen, composer käyttää muotoa “Asiantuntijaohjeen perusteella” eikä “laki määrää”. Se lisää epävarmuuden siitä, että sitova oikeudellinen tulkinta pitää varmistaa varsinaisesta lakitekstistä, yhtiöjärjestyksestä, sopimuksesta tai asiantuntijalta.
 
 ## 15. Validate: laadunvarmistus
 
@@ -1091,6 +1121,16 @@ cipp-build-knowledge-graph --project-code reference_001 --prune
 
 `--dry-run` tarkistaa rakentamisen ilman kirjoituksia. `--prune` poistaa valitun projektin vanhat KG-solmut ennen uudelleenrakennusta. `--all` rakentaa kaikki kannassa olevat referenssiprojektit.
 
+### `cipp-import-legal-guidance-pdf`
+
+Tuo ei-sitovan asiantuntijaoppaan legal guidance -kerrokseen.
+
+```powershell
+cipp-import-legal-guidance-pdf --file data/raw/legal_guidance/virta_putkiremonttiopas_2020/Putkiremonttiopas_4p_lores.pdf --document-code putkiremonttiopas_virta_2020 --title "Taloyhtiön putkiremonttiopas" --author "Jari Virta" --publisher "Kiinteistöalan Kustannus Oy" --publication-year 2020 --edition "4. painos"
+```
+
+Komento kirjoittaa `raw.source_files`, `raw.pages`, `legal.guidance_documents`, `legal.guidance_sections` ja `legal.guidance_items` -kerroksiin. `--dry-run` purkaa ja luokittelee aineiston mutta rollbackaa tietokantamuutokset. Raportteihin ei kirjoiteta pitkiä tekijänoikeudellisia katkelmia.
+
 ### `cipp-build-retrieval-packet`
 
 Rakentaa käyttäjän CIPP-kysymykselle JSON- ja Markdown-muotoisen retrieval-paketin.
@@ -1108,6 +1148,7 @@ Kirjoittaa retrieval smoke matrix -raportin.
 
 ```powershell
 cipp-report-retrieval-smoke-matrix --output data/reports/retrieval_smoke_matrix.json --output-md data/reports/retrieval_smoke_matrix.md
+cipp-report-retrieval-smoke-matrix --include-guidance-topics --output data/reports/retrieval_smoke_matrix_guidance.json --output-md data/reports/retrieval_smoke_matrix_guidance.md
 ```
 
 Tämä on v0.5.0-ehdokkuuden portti. Raportti ei muodosta agenttivastausta, vaan kertoo ovatko ydinkysymysten retrieval-polut riittävän valmiita.

@@ -4,6 +4,7 @@ import json
 
 from cipp_contracts.retrieve.report_retrieval_smoke_matrix import (
     ALLOWED_TOPIC_STATUSES,
+    GUIDANCE_SMOKE_TOPICS,
     SMOKE_TOPICS,
     SmokeTopic,
     build_smoke_matrix,
@@ -95,6 +96,12 @@ def test_each_standard_topic_has_code_and_question() -> None:
     for topic in SMOKE_TOPICS:
         assert topic.topic_code
         assert topic.question
+
+
+def test_guidance_smoke_topics_cover_pipe_renovation_guidance_questions() -> None:
+    assert len(GUIDANCE_SMOKE_TOPICS) == 10
+    assert any("hankesuunnittelu" in topic.question for topic in GUIDANCE_SMOKE_TOPICS)
+    assert any("urakkatarjouksia" in topic.question for topic in GUIDANCE_SMOKE_TOPICS)
 
 
 def test_topic_status_is_pass_partial_or_fail() -> None:

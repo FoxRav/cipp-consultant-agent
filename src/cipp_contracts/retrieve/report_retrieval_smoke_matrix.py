@@ -83,6 +83,21 @@ SMOKE_TOPICS = (
         "Miten puutteet, virheet ja reklamaatiot pitää dokumentoida CIPP-urakassa?",
     ),
 )
+GUIDANCE_SMOKE_TOPICS = (
+    SmokeTopic("guidance_project_planning", "Milloin taloyhtiön kannattaa aloittaa putkiremontin hankesuunnittelu?"),
+    SmokeTopic("guidance_board_checks", "Mitä hallituksen pitää selvittää ennen putkiremontin suunnittelua?"),
+    SmokeTopic("guidance_shareholder_questions", "Mitä kysymyksiä osakkaiden kannattaa esittää ennen sukituspäätöstä?"),
+    SmokeTopic("guidance_condition_survey", "Milloin kuntotutkimus tai koejyrsintä tarvitaan?"),
+    SmokeTopic("guidance_coating_risks", "Mitä riskejä pinnoitukseen liittyy?"),
+    SmokeTopic("guidance_cipp_conditions", "Mihin sukitus soveltuu ja mitä pitää varmistaa ennen työn tilaamista?"),
+    SmokeTopic("guidance_housing_company_decision", "Mitä yhtiökokouksen pitää hyväksyä ennen suunnittelun jatkamista?"),
+    SmokeTopic("guidance_handover_warranty", "Mitä vastaanotossa ja takuuajassa pitää huomioida?"),
+    SmokeTopic("guidance_permit_obligations", "Milloin rakennuslupa tai muu viranomaisvelvoite voi tulla mukaan?"),
+    SmokeTopic(
+        "guidance_amateur_procurement",
+        "Mitä amatööritoimijan pitää ymmärtää ennen kuin taloyhtiö pyytää urakkatarjouksia?",
+    ),
+)
 
 
 class PacketBuilder(Protocol):
@@ -351,6 +366,7 @@ def main() -> None:
     parser.add_argument("--output-md", type=Path)
     parser.add_argument("--stop-on-fail", action="store_true")
     parser.add_argument("--include-debug", action="store_true")
+    parser.add_argument("--include-guidance-topics", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--db")
     parser.add_argument("--env", type=Path, default=Path(".env"))
@@ -363,8 +379,10 @@ def main() -> None:
         def packet_builder(question: str) -> dict[str, Any]:
             return build_retrieval_packet(repository, question, limits=limits)
 
+        topics = SMOKE_TOPICS + GUIDANCE_SMOKE_TOPICS if args.include_guidance_topics else SMOKE_TOPICS
         report = build_smoke_matrix(
             packet_builder,
+            topics=topics,
             stop_on_fail=args.stop_on_fail,
             include_debug=args.include_debug,
         )

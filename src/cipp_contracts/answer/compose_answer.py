@@ -161,6 +161,18 @@ TOPIC_TEMPLATES: dict[str, TopicTemplate] = {
             "Miten korjausten valmistuminen todennetaan?",
         ),
     ),
+    "expert_guidance": TopicTemplate(
+        key_points=(
+            "Asiantuntijaohjeen perusteella taloyhtiön kannattaa edetä vaiheittain: lähtötiedot, kuntotutkimus, hankesuunnittelu, päätökset ja vasta sitten tarjouspyynnöt.",
+            "Oppaan kaltaista aineistoa käytetään prosessi- ja tarkistuslistaohjauksena, ei sitovana lakina.",
+            "Ennen urakkatarjouksia pitää erottaa menetelmävalinta, suunnittelun taso, osakkaiden tiedottaminen ja päätöksentekopisteet.",
+        ),
+        recommended_questions=(
+            "Onko taloyhtiöllä ajantasainen kuntotutkimus tai muu selvitys putkiston kunnosta?",
+            "Onko hankesuunnittelun sisältö ja päätöspisteet kuvattu hallitukselle ja osakkaille?",
+            "Mitä menetelmävaihtoehtoja suunnittelijan pitää vertailla ennen tarjouspyyntöä?",
+        ),
+    ),
 }
 
 
@@ -221,6 +233,7 @@ def select_sources(packet: dict[str, Any], max_sources: int = 8) -> list[dict[st
                     "source_type": source_type,
                     "anonymized_reference_label": clean_text(row.get("reference_label") or "reference"),
                     "document_type": clean_text(row.get("document_type") or "unknown"),
+                    "source_class": source_class(row.get("document_type") or ""),
                     "text_context_status": clean_text(status),
                     "snippet": clean_text(row.get("snippet") or ""),
                     "confidence": row.get("confidence") or row.get("source_confidence"),
@@ -267,11 +280,15 @@ def build_key_points(topics: list[str], sources: list[dict[str, Any]], max_bulle
 def build_source_notes(sources: list[dict[str, Any]], max_notes: int) -> list[str]:
     notes: list[str] = []
     for source in sources[:max_notes]:
-        prefix = "Heikompi fallback-lähde" if source["source_strength"] == "weak" else "Lähdekatkelma"
+        if source["source_class"] == "expert_guidance":
+            prefix = "Asiantuntijaohjeen katkelma"
+        else:
+            prefix = "Heikompi fallback-lähde" if source["source_strength"] == "weak" else "Lähdekatkelma"
+        snippet = source_note_snippet(source)
         notes.append(
             clean_text(
                 f"{prefix} ({source['anonymized_reference_label']} / {source['document_type']} / "
-                f"{source['text_context_status']}): {source['snippet']}"
+                f"{source['text_context_status']}): {snippet}"
             )
         )
     return notes
@@ -287,6 +304,10 @@ def build_uncertainties(packet: dict[str, Any], sources: list[dict[str, Any]]) -
         uncertainties.append("Osa evidence-riveistä jäi ilman suoraa tekstikontekstia.")
     if any(source["source_strength"] == "weak" for source in sources):
         uncertainties.append("Osa lähteistä on fallback-tasoisia eikä niitä käytetä vahvoina väitteinä.")
+    if any(source["source_class"] == "expert_guidance" for source in sources):
+        uncertainties.append(
+            "Tämä kohta perustuu asiantuntijaoppaaseen. Sitova oikeudellinen tulkinta pitää varmistaa varsinaisesta lakitekstistä, yhtiöjärjestyksestä, sopimuksesta tai asiantuntijalta."
+        )
     if not sources:
         uncertainties.append("Retrieval-paketissa ei ollut käytettävää anonymisoitua lähdekatkelmaa.")
     if packet.get("missing_user_case_fields"):
@@ -322,6 +343,20 @@ def source_locator(source_type: str, row: dict[str, Any]) -> str:
     return f"page {page_no}" if page_no is not None else "raw_page"
 
 
+def source_class(document_type: str) -> str:
+    if "guidance" in document_type:
+        return "expert_guidance"
+    return "retrieval_evidence"
+
+
+def source_note_snippet(source: dict[str, Any]) -> str:
+    limit = 240 if source.get("source_class") == "expert_guidance" else 600
+    snippet = clean_text(source.get("snippet") or "")
+    if len(snippet) <= limit:
+        return snippet
+    return snippet[: limit - 1].rstrip() + "…"
+
+
 def render_markdown(answer: dict[str, Any]) -> str:
     lines = [
         "# Source-grounded answer",
@@ -355,7 +390,7 @@ def render_markdown(answer: dict[str, Any]) -> str:
                 "- "
                 + clean_text(
                     f"[{source['anonymized_reference_label']} / {source['document_type']} / "
-                    f"{source['text_context_status']}] {source['locator']}"
+                    f"{source['text_context_status']} / {source['source_class']}] {source['locator']}"
                 )
             )
     else:
