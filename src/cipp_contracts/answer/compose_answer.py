@@ -189,6 +189,14 @@ def compose_answer(
     uncertainties = build_uncertainties(retrieval_packet, sources)
 
     key_points = build_key_points(topics, sources, max_answer_bullets)
+    if any(source["source_class"] == "expert_guidance" for source in sources) and not any(
+        "asiantuntijaohjeen perusteella" in point.lower() or "oppaan" in point.lower()
+        for point in key_points
+    ):
+        key_points = [
+            "Asiantuntijaohjeen perusteella tätä kohtaa käytetään prosessi- ja tarkistuslistaohjauksena, ei sitovana lakiväitteenä.",
+            *key_points,
+        ][:max_answer_bullets]
     if answer_status == "insufficient_evidence":
         key_points = []
 

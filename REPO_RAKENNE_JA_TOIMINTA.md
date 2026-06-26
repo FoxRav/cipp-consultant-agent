@@ -851,6 +851,23 @@ Tämä moduuli ei ole täysi agentti. Se ei keskustele, suunnittele uutta tiedon
 
 Kun vastaus perustuu asiantuntijaoppaaseen, composer käyttää muotoa “Asiantuntijaohjeen perusteella” eikä “laki määrää”. Se lisää epävarmuuden siitä, että sitova oikeudellinen tulkinta pitää varmistaa varsinaisesta lakitekstistä, yhtiöjärjestyksestä, sopimuksesta tai asiantuntijalta.
 
+### `src/cipp_contracts/answer/report_answer_smoke_matrix.py`
+
+Rakentaa answer composer smoke matrix -raportin ennen mahdollista `v0.6.0`-releaseä.
+
+Mitä se tekee:
+
+- ajaa 20 vakioitua kysymystä `cipp-compose-answer`-logiikan läpi
+- 10 aihetta ovat core CIPP -aiheita: maksuerät, JV, SV, urakkarajat, videotarkastus, vastaanotto, takuu, vakuudet/vakuutukset, lisätyöt/yksikköhinnat ja puutteet/reklamaatiot
+- 10 aihetta ovat legal guidance -aiheita: hankesuunnittelu, hallituksen valmistelu, osakkaiden kysymykset, kuntotutkimus, pinnoituksen riskit, sukituksen soveltuvuus, yhtiökokouspäätökset, vastaanotto/takuu, viranomaisvelvoitteet ja amatööritoimijan tarjouspyyntövalmistelu
+- tarkistaa, että `llm_used` on aina `false`
+- tarkistaa Markdown-outputin anonymisointi- ja polkuturvallisuuden
+- tarkistaa, että expert guidance -aineistoa ei esitetä sitovana lakina
+- ajaa kevyen hallucination guardin euroille, prosenteille, pitkille opaskatkelmille ja raakadataviitteille
+- laskee per aihe `pass`, `partial` tai `fail` -tilan sekä matrix-tason `release_candidate`-arvon
+
+Tämä eroaa retrieval smoke matrixista: retrieval-portti testaa löydetäänkö aineisto; answer-portti testaa syntyykö siitä turvallinen käyttäjälle näytettävä lähdevastaus. Tämäkään moduuli ei käytä LLM:ää.
+
 ## 15. Validate: laadunvarmistus
 
 ### `src/cipp_contracts/validate/validate_canonical_contract.py`
@@ -1163,6 +1180,16 @@ cipp-compose-answer --retrieval-packet data/reports/retrieval_packet.json --outp
 ```
 
 Komento voi joko lukea valmiin retrieval-paketin tai rakentaa sen ensin kysymyksestä. Se ei kutsu LLM:ää eikä muodosta väitteitä ilman retrieval-paketin lähdekatkelmia. Outputin `answer_status` on `answered`, `partial` tai `insufficient_evidence`.
+
+### `cipp-report-answer-smoke-matrix`
+
+Kirjoittaa answer composer smoke matrix -raportin.
+
+```powershell
+cipp-report-answer-smoke-matrix --output data/reports/answer_smoke_matrix.json --output-md data/reports/answer_smoke_matrix.md
+```
+
+Tämä on `v0.6.0`-ehdokkuuden portti. Raportti ei ole agenttivastaus, vaan se tarkistaa että 20 core/guidance-aiheen vastaukset ovat lähdeperustaisia, anonymisoituja, LLM-vapaita ja expert guidance -aineiston osalta ei-sitovasti muotoiltuja.
 
 ## 20. Tyypillinen uuden projektin käsittely
 

@@ -230,6 +230,16 @@ cipp-report-retrieval-smoke-matrix --include-guidance-topics --output data/repor
 
 Raportti laskee jokaiselle aiheelle `pass`, `partial` tai `fail` -tilan sekä matrix-tason `release_candidate`-arvon. `partial` voi olla hyväksyttävä esimerkiksi vastaanotto-, takuu- tai videotarkastusaiheessa, jos raportti kertoo selkeän syyn eikä anonymisointitarkistus löydä vuotoja. Tämä ei ole agenttivastaus, vaan retrieval-valmiuden testi.
 
+## Answer composer smoke matrix
+
+`cipp-report-answer-smoke-matrix` on hyväksymisportti ennen mahdollista `v0.6.0`-releaseä. Se ajaa 20 kysymystä composerin läpi: samat 10 core CIPP -aihetta kuin retrieval smoke matrix sekä 10 legal guidance -aihetta putkiremontin hankesuunnittelusta, hallituksen valmistelusta, osakaskysymyksistä, kuntotutkimuksesta, menetelmävalinnasta, vastaanotosta, takuusta ja viranomaisvelvoitteista.
+
+```powershell
+cipp-report-answer-smoke-matrix --output data/reports/answer_smoke_matrix.json --output-md data/reports/answer_smoke_matrix.md
+```
+
+Retrieval smoke matrix testaa, löytyykö aineisto. Answer smoke matrix testaa, muodostuuko aineistosta turvallinen lähdevastaus: `llm_used=false`, lähteet mukana, Markdown ei vuoda raakadataa, expert guidance ei muutu lakiväitteeksi ja hallucination guard ei löydä keksittyjä euroja, prosentteja, määräaikoja tai pitkiä opaskatkelmia. `v0.6.0` on release candidate vasta, kun matriisissä ei ole `fail`-aiheita.
+
 ## Source-grounded answer composer
 
 `cipp-compose-answer` on ensimmäinen kontrolloitu vastauskerros retrieval-paketin päälle. Se ei ole täysi agentti, ei kutsu LLM:ää eikä keksi tietoa retrieval-paketin ulkopuolelta. Se valitsee tärkeimmät anonymisoidut lähdekatkelmat, muodostaa lyhyen lähdeperustaisen vastauksen ja näyttää puuttuvat käyttäjätiedot sekä epävarmuudet.

@@ -199,6 +199,16 @@ def test_boundaries_and_jv_templates_are_used() -> None:
     assert any("JV-laajuus" in point for point in answer["key_points"])
 
 
+def test_expert_guidance_source_adds_non_binding_phrasing_for_core_topic() -> None:
+    packet = retrieval_packet(topics=["quality_video"])
+    packet["sections"][0]["document_type"] = "legal_guidance_pipe_renovation"
+
+    answer = compose_answer(packet)
+
+    assert any("Asiantuntijaohjeen perusteella" in point for point in answer["key_points"])
+    assert any("asiantuntijaoppaaseen" in uncertainty for uncertainty in answer["uncertainties"])
+
+
 def test_composer_does_not_invent_numbers_not_in_packet() -> None:
     answer = compose_answer(retrieval_packet(topics=["payment"]))
     serialized = json.dumps(answer, ensure_ascii=False)
