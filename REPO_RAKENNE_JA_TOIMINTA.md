@@ -75,10 +75,12 @@ Seuraavat kehitysaskeleet tehdään tässä järjestyksessä:
 1. **Käsittelyn laaturaportti.** Komento `cipp-report-processing-quality` näyttää projektikohtaisesti tiedostomäärät, tekstisivut, uusimmat onnistuneet purut, epäonnistuneet ajot, OCR-tarpeet ja puuttuvat tekstit.
 2. **Markdown- ja section-kerroksen päivitys.** `cipp-build-markdown` kokoaa kaikki saman dokumenttityypin raw-tekstit yhteen markdowniin ja `cipp-load-markdown-sections --ensure-raw-documents --prune-missing-markdown` vie ne `doc.sections`- ja `doc.clauses`-kerrokseen.
 3. **Projektifaktojen rikastus.** Poimitaan jokaisesta hankkeesta samat vertailukentät: asuntojen määrä, JV/SV-laajuus, pystylinjat, pohjaviemärit, tonttilinjat, hinnat, lisätyöt, vastaanotto, puutteet, takuu ja videotarkastukset.
-4. **Vertailukelpoisuusmatriisi.** Rakennetaan raportti, jossa jokainen referenssi näkyy samoilla sarakkeilla ja puuttuvat tiedot erottuvat.
+4. **Vertailukelpoisuusmatriisi.** Komento `cipp-report-reference-facts` rakentaa raportin, jossa jokainen referenssi näkyy samoilla sarakkeilla ja puuttuvat tiedot erottuvat.
 5. **Ensimmäinen kysely-MVP.** Käyttäjä antaa taloyhtiön tiedot, järjestelmä valitsee lähimmän referenssikohteen ja antaa alustavan hinta-/riskikommentin lähdeaineiston perusteella.
 
 Tämän suunnitelman seuraava konkreettinen toteutettava osa on käsittelyn laaturaportti.
+
+Knowledge graph -kerrosta ei rakenneta ennen kuin tekstikerroksen ja vertailufaktamatriisin hyväksymisportit ovat kunnossa. Tavoite on välttää tilanne, jossa graafi näyttäisi täsmälliseltä mutta perustuisi puuttuviin tai heikosti jäljitettäviin faktoihin.
 
 ## 4. Repojuuren tiedostot
 
@@ -650,6 +652,21 @@ Mitä se tekee:
 
 Tätä käytetään, kun halutaan tehdä projektien perusfaktoista vertailukelpoisia.
 
+### `src/cipp_contracts/normalize/report_reference_facts.py`
+
+Rakentaa kuuden referenssiprojektin vertailufaktamatriisin nykyisestä PostgreSQL-tietokannasta.
+
+Mitä se tekee:
+
+- lukee faktat `core`, `finance`, `domain`, `quality`, `ops`, `doc` ja `raw`-kerroksista
+- laskee esimerkiksi hinta/asunto-luvun ja maksuerätaulukon summan
+- merkitsee puuttuvat kentät `missing_fields`-sarakkeeseen
+- merkitsee heikosti todistetut kentät `weak_evidence_fields`-sarakkeeseen
+- kirjoittaa faktakohtaisen lähdejäljen kevyenä `evidence_json`-rakenteena
+- antaa jokaiselle projektille `kg_readiness_status`-arvon: `ready`, `needs_review` tai `not_ready`
+
+Tämä on hyväksymisportti ennen knowledge graphia. Jos faktat eivät ole vielä selkeästi vertailukelpoisia ja jäljitettäviä, graafikerrosta ei pidä rakentaa.
+
 ## 11. Load: kanonisesta mallista tietokantaan
 
 ### `src/cipp_contracts/load/load_contract_package.py`
@@ -901,6 +918,20 @@ Kirjoittaa käsittelyn laaturaportin. Raportti erottaa viimeisimmän onnistuneen
 ```powershell
 cipp-report-processing-quality --output data/reports/processing_quality_report.md
 ```
+
+### `cipp-report-reference-facts`
+
+Kirjoittaa referenssiprojektien vertailufaktamatriisin Markdown- ja CSV-muotoon.
+
+```powershell
+cipp-report-reference-facts --output-md data/reports/reference_facts_matrix.md --output-csv data/reports/reference_facts_matrix.csv
+```
+
+Raportin `kg_readiness_status` tarkoittaa:
+
+- `ready`: tekstikerros ja keskeiset faktat ovat kunnossa ja evidence on riittävän vahvaa.
+- `needs_review`: osa tiedoista puuttuu, evidence on heikkoa tai hinta-/maksuerävertailu vaatii tarkistusta.
+- `not_ready`: tekstikerros tai keskeinen faktapohja puuttuu niin, ettei graafikerrosta saa vielä aloittaa.
 
 ## 17. Tyypillinen uuden projektin käsittely
 

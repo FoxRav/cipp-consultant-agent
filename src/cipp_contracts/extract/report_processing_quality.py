@@ -25,8 +25,35 @@ def fetch_rows(conn: psycopg.Connection[Any], sql: str, params: tuple[Any, ...] 
     return list(conn.execute(sql, params).fetchall())
 
 
+def evaluate_project_status(row: dict[str, Any]) -> tuple[str, list[str]]:
+    warnings: list[str] = []
+    source_files_total = int(row.get("source_files_total") or 0)
+    raw_pages_count = int(row.get("raw_pages_count") or 0)
+    doc_sections_count = int(row.get("doc_sections_count") or 0)
+    source_files_without_status = int(row.get("source_files_without_text_or_status") or 0)
+    latest_failed = int(row.get("latest_failed_extraction_runs") or 0)
+
+    if source_files_total == 0:
+        return "fail", ["no source files"]
+    if raw_pages_count == 0:
+        return "fail", ["no raw page/text records"]
+    if doc_sections_count == 0:
+        return "fail", ["no doc.sections records"]
+    if source_files_without_status:
+        return "fail", [f"{source_files_without_status} source files without text or latest status"]
+
+    if latest_failed:
+        warnings.append(f"{latest_failed} latest failed extraction runs")
+    if int(row.get("markdown_documents_count") or 0) == 0:
+        warnings.append("no markdown-backed document sections")
+    if int(row.get("source_files_with_raw_pages") or 0) < source_files_total:
+        warnings.append("some source files rely on status/metadata instead of raw text")
+
+    return ("warning" if warnings else "ok"), warnings
+
+
 def project_summary(conn: psycopg.Connection[Any]) -> list[dict[str, Any]]:
-    return fetch_rows(
+    rows = fetch_rows(
         conn,
         """
         WITH page_counts AS (
@@ -34,23 +61,8 @@ def project_summary(conn: psycopg.Connection[Any]) -> list[dict[str, Any]]:
             FROM raw.pages
             GROUP BY source_file_id
         ),
-        latest_ocr AS (
-            SELECT source_file_id, status
-            FROM (
-                SELECT
-                    source_file_id,
-                    status,
-                    row_number() OVER (
-                        PARTITION BY source_file_id
-                        ORDER BY extraction_started_at DESC, id DESC
-                    ) AS rn
-                FROM raw.extraction_runs
-                WHERE extractor_name = 'doclayout_ai_visual_ocr'
-            ) ranked
-            WHERE rn = 1
-        ),
-        latest_source_failures AS (
-            SELECT DISTINCT source_file_id
+        latest_runs AS (
+            SELECT *
             FROM (
                 SELECT
                     source_file_id,
@@ -62,28 +74,86 @@ def project_summary(conn: psycopg.Connection[Any]) -> list[dict[str, Any]]:
                     ) AS rn
                 FROM raw.extraction_runs
             ) ranked
-            WHERE rn = 1 AND status = 'failed'
+            WHERE rn = 1
+        ),
+        latest_by_file AS (
+            SELECT *
+            FROM (
+                SELECT
+                    source_file_id,
+                    status,
+                    row_number() OVER (
+                        PARTITION BY source_file_id
+                        ORDER BY extraction_started_at DESC, id DESC
+                    ) AS rn
+                FROM raw.extraction_runs
+            ) ranked
+            WHERE rn = 1
+        ),
+        source_status AS (
+            SELECT
+                sf.id,
+                sf.project_code,
+                sf.notes,
+                coalesce(pc.pages, 0) AS pages,
+                lbf.source_file_id IS NOT NULL AS has_latest_status,
+                count(*) FILTER (
+                    WHERE lr.extractor_name = 'office_ooxml_text' AND lr.status = 'completed'
+                ) > 0 AS office_completed,
+                count(*) FILTER (
+                    WHERE lr.extractor_name = 'doclayout_ai_visual_ocr' AND lr.status = 'completed'
+                ) > 0 AS ocr_completed,
+                count(*) FILTER (
+                    WHERE lr.extractor_name = 'remaining_file_text' AND lr.status = 'completed'
+                ) > 0 AS remaining_completed,
+                count(*) FILTER (WHERE lr.status = 'failed') AS latest_failed_runs
+            FROM raw.source_files sf
+            LEFT JOIN page_counts pc ON pc.source_file_id = sf.id
+            LEFT JOIN latest_runs lr ON lr.source_file_id = sf.id
+            LEFT JOIN latest_by_file lbf ON lbf.source_file_id = sf.id
+            GROUP BY sf.id, sf.project_code, sf.notes, pc.pages, lbf.source_file_id
+        ),
+        section_counts AS (
+            SELECT
+                p.project_code,
+                count(DISTINCT cd.id) FILTER (WHERE ds.id IS NOT NULL) AS markdown_documents_count,
+                count(DISTINCT ds.id) AS doc_sections_count,
+                count(DISTINCT dc.id) AS doc_clauses_count
+            FROM core.projects p
+            LEFT JOIN core.contracts c ON c.project_id = p.id
+            LEFT JOIN core.contract_documents cd ON cd.contract_id = c.id
+            LEFT JOIN doc.sections ds ON ds.contract_document_id = cd.id
+            LEFT JOIN doc.clauses dc ON dc.section_id = ds.id
+            GROUP BY p.project_code
         )
         SELECT
-            sf.project_code,
-            count(*) AS source_files,
-            count(*) FILTER (WHERE coalesce(pc.pages, 0) > 0) AS files_with_pages,
-            count(*) FILTER (WHERE coalesce(pc.pages, 0) = 0) AS files_without_pages,
-            coalesce(sum(pc.pages), 0) AS raw_pages,
-            count(*) FILTER (WHERE sf.needs_ocr IS TRUE) AS needs_ocr,
+            ss.project_code,
+            count(*) AS source_files_total,
+            count(*) FILTER (WHERE ss.pages > 0) AS source_files_with_raw_pages,
+            coalesce(sum(ss.pages), 0) AS raw_pages_count,
+            coalesce(max(sc.markdown_documents_count), 0) AS markdown_documents_count,
+            coalesce(max(sc.doc_sections_count), 0) AS doc_sections_count,
+            coalesce(max(sc.doc_clauses_count), 0) AS doc_clauses_count,
+            count(*) FILTER (WHERE ss.office_completed) AS office_extracted_count,
+            count(*) FILTER (WHERE ss.ocr_completed) AS ocr_extracted_count,
             count(*) FILTER (
-                WHERE sf.needs_ocr IS TRUE
-                  AND coalesce(lo.status, '') <> 'completed'
-            ) AS open_ocr,
-            count(lsf.source_file_id) AS latest_failed_files
-        FROM raw.source_files sf
-        LEFT JOIN page_counts pc ON pc.source_file_id = sf.id
-        LEFT JOIN latest_ocr lo ON lo.source_file_id = sf.id
-        LEFT JOIN latest_source_failures lsf ON lsf.source_file_id = sf.id
-        GROUP BY sf.project_code
-        ORDER BY sf.project_code
+                WHERE ss.notes ILIKE 'Derived PDF converted from DWG%%'
+            ) AS dwg_derived_count,
+            count(*) FILTER (WHERE ss.remaining_completed) AS remaining_text_extracted_count,
+            count(*) FILTER (WHERE ss.pages = 0 AND NOT ss.has_latest_status)
+                AS source_files_without_text_or_status,
+            coalesce(sum(ss.latest_failed_runs), 0) AS latest_failed_extraction_runs
+        FROM source_status ss
+        LEFT JOIN section_counts sc ON sc.project_code = ss.project_code
+        GROUP BY ss.project_code
+        ORDER BY ss.project_code
         """,
     )
+    for row in rows:
+        status, warnings = evaluate_project_status(row)
+        row["status"] = status
+        row["warnings"] = "; ".join(warnings)
+    return rows
 
 
 def extension_summary(conn: psycopg.Connection[Any]) -> list[dict[str, Any]]:
@@ -178,9 +248,9 @@ def build_report(db_url: str, limit: int) -> str:
         extractors = latest_extractor_summary(conn)
         items = followups(conn, limit)
 
-    total_sources = sum(int(row["source_files"]) for row in projects)
-    total_pages = sum(int(row["raw_pages"]) for row in projects)
-    total_followups = sum(int(row["files_without_pages"]) for row in projects)
+    total_sources = sum(int(row["source_files_total"]) for row in projects)
+    total_pages = sum(int(row["raw_pages_count"]) for row in projects)
+    total_followups = sum(int(row["source_files_without_text_or_status"]) for row in projects)
 
     lines = [
         "# Processing Quality Report",
@@ -190,7 +260,7 @@ def build_report(db_url: str, limit: int) -> str:
         f"- Projects: {len(projects)}",
         f"- Source files: {total_sources}",
         f"- Raw page/text records: {total_pages}",
-        f"- Files without page/text records: {total_followups}",
+        f"- Source files without text or latest status: {total_followups}",
         "",
         "## Projects",
         "",
@@ -199,24 +269,38 @@ def build_report(db_url: str, limit: int) -> str:
         table(
             [
                 "Project",
-                "Sources",
-                "Files with text",
-                "Files without text",
-                "Raw pages",
-                "Needs OCR",
-                "Open OCR",
-                "Latest failed files",
+                "source_files_total",
+                "source_files_with_raw_pages",
+                "raw_pages_count",
+                "markdown_documents_count",
+                "doc_sections_count",
+                "doc_clauses_count",
+                "office_extracted_count",
+                "ocr_extracted_count",
+                "dwg_derived_count",
+                "remaining_text_extracted_count",
+                "source_files_without_text_or_status",
+                "latest_failed_extraction_runs",
+                "warnings",
+                "status",
             ],
             [
                 [
                     row["project_code"],
-                    row["source_files"],
-                    row["files_with_pages"],
-                    row["files_without_pages"],
-                    row["raw_pages"],
-                    row["needs_ocr"],
-                    row["open_ocr"],
-                    row["latest_failed_files"],
+                    row["source_files_total"],
+                    row["source_files_with_raw_pages"],
+                    row["raw_pages_count"],
+                    row["markdown_documents_count"],
+                    row["doc_sections_count"],
+                    row["doc_clauses_count"],
+                    row["office_extracted_count"],
+                    row["ocr_extracted_count"],
+                    row["dwg_derived_count"],
+                    row["remaining_text_extracted_count"],
+                    row["source_files_without_text_or_status"],
+                    row["latest_failed_extraction_runs"],
+                    row["warnings"],
+                    row["status"],
                 ]
                 for row in projects
             ],
@@ -269,7 +353,6 @@ def build_report(db_url: str, limit: int) -> str:
             "## Reading The Report",
             "",
             "- Latest extractor status is based on the newest run per source file and extractor.",
-            "- Needs OCR is the original source-file flag; Open OCR means no completed visual OCR run exists yet.",
             "- Historical failed runs are kept in the database as audit history.",
             "- Files without text are not always errors: images, DWG originals, ZIPs and metadata files can be valid follow-up items.",
             "",

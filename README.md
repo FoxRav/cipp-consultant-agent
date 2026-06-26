@@ -149,9 +149,19 @@ cipp-extract-visual-ocr --project reference_001 --output data\extracted\visual_o
 cipp-extract-dwg-trueview --project reference_001 --output data\extracted\dwg_trueview --accoreconsole-path "C:\Program Files\Autodesk\DWG TrueView 2027 - English\accoreconsole.exe"
 cipp-extract-visual-ocr --project reference_001 --output data\extracted\visual_ocr_dwg_pdf --engine structurev3 --quality standard --pdf-only --notes-contains "Derived PDF converted from DWG"
 cipp-report-processing-quality --output data\reports\processing_quality_report.md
+cipp-report-reference-facts --output-md data\reports\reference_facts_matrix.md --output-csv data\reports\reference_facts_matrix.csv
 cipp-build-markdown --project reference_001 --output data\extracted\reference_001\markdown
 cipp-link-contract-documents --project reference_001
 cipp-load-markdown-sections --project reference_001 --input data\extracted\reference_001\markdown --ensure-raw-documents --prune-missing-markdown
 ```
+
+## Hyväksymisportit ennen knowledge graphia
+
+Knowledge graph -kerrosta ei rakenneta ennen kuin kaksi porttia on kunnossa:
+
+1. `cipp-report-processing-quality` varmistaa vakaan tekstikerroksen: lähdetiedostot, `raw.pages`, markdownit, `doc.sections`, `doc.clauses` ja viimeisimmät extractor-statukset.
+2. `cipp-report-reference-facts` tuottaa vertailufaktamatriisin ja `kg_readiness_status`-arvon jokaiselle referenssille.
+
+`kg_readiness_status` voi olla `ready`, `needs_review` tai `not_ready`. Se kertoo, voidaanko projektin faktat viedä myöhemmin graafikerrokseen ilman että puuttuvat tiedot, heikko evidence tai tekstikerroksen virheet piiloutuvat.
 
 
