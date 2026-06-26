@@ -168,6 +168,7 @@ DOMAIN_SOURCE_TABLES = {
     "domain.technical_requirements",
     "domain.responsibility_matrix",
 }
+PROJECT_NAME_SUFFIXES = ("koivu", "hovi", "talo")
 
 
 @dataclass(frozen=True)
@@ -1204,6 +1205,11 @@ def sanitize_text(value: str) -> str:
         "[address redacted]",
         text,
         flags=re.IGNORECASE,
+    )
+    text = re.sub(
+        rf"\b[A-ZÅÄÖ][A-Za-zÅÄÖåäö-]*(?:{'|'.join(PROJECT_NAME_SUFFIXES)})\b",
+        "[reference redacted]",
+        text,
     )
     text = re.sub(
         r"\b[A-ZÅÄÖ][A-Za-zÅÄÖåäö&.-]*(?:\s+[A-ZÅÄÖ][A-Za-zÅÄÖåäö&.-]*){0,4}\s+(?:Oy|OY|Oyj|RY|ry|Ky|Ab)\b",

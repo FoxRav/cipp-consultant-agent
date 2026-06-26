@@ -207,4 +207,13 @@ cipp-build-retrieval-packet --question "Mitä pitää huomioida taloyhtiön JV-p
 
 Packetin `answer_scope` on `general_cipp_user_case`. `reference_usage.mode` on `internal_anonymized_grounding`, ja Markdown-raportissa referenssit näkyvät vain `reference_001`-tyyppisinä sisäisinä lähteinä. `--debug-reference-project-code` on vain kehittäjän tarkistukseen, ei normaali käyttäjäkyselyn käyttötapa.
 
+## Retrieval smoke matrix
+
+`cipp-report-retrieval-smoke-matrix` on hyväksymisportti ennen mahdollista `v0.5.0`-releaseä. Se ajaa 10 vakioitua CIPP-aihetta nykyisen retrieval-packet-builderin läpi: maksuerät, JV, SV, urakkarajat, videotarkastus, vastaanotto, takuu, vakuudet/vakuutukset, lisätyöt/yksikköhinnat sekä puutteet/reklamaatiot.
+
+```powershell
+cipp-report-retrieval-smoke-matrix --output data/reports/retrieval_smoke_matrix.json --output-md data/reports/retrieval_smoke_matrix.md
+```
+
+Raportti laskee jokaiselle aiheelle `pass`, `partial` tai `fail` -tilan sekä matrix-tason `release_candidate`-arvon. `partial` voi olla hyväksyttävä esimerkiksi vastaanotto-, takuu- tai videotarkastusaiheessa, jos raportti kertoo selkeän syyn eikä anonymisointitarkistus löydä vuotoja. Tämä ei ole agenttivastaus, vaan retrieval-valmiuden testi.
 

@@ -779,6 +779,21 @@ Mitä se tekee:
 
 Tämä on v0.5.0-kehityslinjan retrieval-vaihe. Se ei ole vielä agenttivastaus: myöhempi hybrid RAG / GraphRAG -vastauslogiikka käyttää tätä pakettia vastauksen aineistona.
 
+### `src/cipp_contracts/retrieve/report_retrieval_smoke_matrix.py`
+
+Rakentaa retrieval smoke matrix -raportin ennen mahdollista `v0.5.0`-releaseä.
+
+Mitä se tekee:
+
+- ajaa 10 vakioitua CIPP-aihetta nykyisen `build_retrieval_packet.py`-logiikan läpi
+- aiheet ovat maksuerät, JV, SV, urakkarajat, videotarkastus, vastaanotto, takuu, vakuudet/vakuutukset, lisätyöt/yksikköhinnat ja puutteet/reklamaatiot
+- mittaa per aihe `retrieval_status`-, `evidence_coverage_status`-, tekstikonteksti-, evidence- ja reference usage -luvut
+- antaa jokaiselle aiheelle `topic_status`-arvon: `pass`, `partial` tai `fail`
+- laskee matrix-tason `release_candidate`-arvon
+- tekee pattern-pohjaisen anonymisoinnin smoke checkin Markdown-outputille
+
+`partial` voi olla hyväksyttävä esimerkiksi videotarkastus-, vastaanotto- tai takuuaiheessa, jos aihe ei kaadu, evidence löytyy osittain ja raportti kertoo syyn. `fail` estää release candidate -tilan.
+
 ## 14. Validate: laadunvarmistus
 
 ### `src/cipp_contracts/validate/validate_canonical_contract.py`
@@ -1059,6 +1074,16 @@ cipp-build-retrieval-packet --question "Mitä pitää huomioida taloyhtiön JV-p
 ```
 
 Komento ei vastaa käyttäjän puolesta, vaan palauttaa aineiston. Se ei käytä referenssiprojektikoodia normaalina hakukohteena. `--debug-reference-project-code` on vain kehittäjän tarkistusta varten.
+
+### `cipp-report-retrieval-smoke-matrix`
+
+Kirjoittaa retrieval smoke matrix -raportin.
+
+```powershell
+cipp-report-retrieval-smoke-matrix --output data/reports/retrieval_smoke_matrix.json --output-md data/reports/retrieval_smoke_matrix.md
+```
+
+Tämä on v0.5.0-ehdokkuuden portti. Raportti ei muodosta agenttivastausta, vaan kertoo ovatko ydinkysymysten retrieval-polut riittävän valmiita.
 
 ## 19. Tyypillinen uuden projektin käsittely
 

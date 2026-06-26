@@ -190,6 +190,23 @@ def test_reference_usage_is_anonymized() -> None:
     assert "secret_project_a" not in serialized
 
 
+def test_known_reference_markers_are_sanitized_from_text_context() -> None:
+    repository = fixture_repository()
+    repository.sections[0]["body_text"] = "Referenssikoivu vastaanotto todettiin valmiiksi."
+    repository.raw_pages[0]["raw_text"] = "Mallihovi loppukuvaus ja Esimerkkitalo vakuudet."
+
+    packet = build_retrieval_packet(
+        repository,
+        "Mitä maksueristä kannattaa sopia CIPP-sukitusurakassa?",
+    )
+    markdown = render_markdown(packet).lower()
+
+    assert "referenssikoivu" not in markdown
+    assert "mallihovi" not in markdown
+    assert "esimerkkitalo" not in markdown
+    assert "[reference redacted]" in markdown
+
+
 def test_no_results_does_not_crash() -> None:
     packet = build_retrieval_packet(
         MemoryRetrievalRepository(),
