@@ -76,11 +76,12 @@ Seuraavat kehitysaskeleet tehdään tässä järjestyksessä:
 2. **Markdown- ja section-kerroksen päivitys.** `cipp-build-markdown` kokoaa kaikki saman dokumenttityypin raw-tekstit yhteen markdowniin ja `cipp-load-markdown-sections --ensure-raw-documents --prune-missing-markdown` vie ne `doc.sections`- ja `doc.clauses`-kerrokseen.
 3. **Projektifaktojen rikastus.** Poimitaan jokaisesta hankkeesta samat vertailukentät: asuntojen määrä, JV/SV-laajuus, pystylinjat, pohjaviemärit, tonttilinjat, hinnat, lisätyöt, vastaanotto, puutteet, takuu ja videotarkastukset.
 4. **Vertailukelpoisuusmatriisi.** Komento `cipp-report-reference-facts` rakentaa raportin, jossa jokainen referenssi näkyy samoilla sarakkeilla ja puuttuvat tiedot erottuvat.
-5. **Ensimmäinen kysely-MVP.** Käyttäjä antaa taloyhtiön tiedot, järjestelmä valitsee lähimmän referenssikohteen ja antaa alustavan hinta-/riskikommentin lähdeaineiston perusteella.
+5. **PostgreSQL-native knowledge graph.** `cipp-build-knowledge-graph` kokoaa rakenteisista tietokantatauluista todistettavan suhdeverkon `kg`-skeemaan ilman Neo4j:tä tai LLM-arvauksia.
+6. **Ensimmäinen kysely-MVP.** Käyttäjä antaa taloyhtiön tiedot, järjestelmä valitsee lähimmän referenssikohteen ja antaa alustavan hinta-/riskikommentin lähdeaineiston perusteella.
 
-Tämän suunnitelman seuraava konkreettinen toteutettava osa on käsittelyn laaturaportti.
+Tämän suunnitelman nykyinen konkreettinen toteutettu osa on PostgreSQL-native knowledge graph -kerros.
 
-Knowledge graph -kerrosta ei rakenneta ennen kuin tekstikerroksen ja vertailufaktamatriisin hyväksymisportit ovat kunnossa. Tavoite on välttää tilanne, jossa graafi näyttäisi täsmälliseltä mutta perustuisi puuttuviin tai heikosti jäljitettäviin faktoihin.
+Tärkeä rajaus: `kg` voidaan rakentaa olemassa olevista rakenteisista riveistä, mutta GraphRAG-/LLM-pohjaista käyttöä ei aloiteta ennen kuin tekstikerroksen ja vertailufaktamatriisin hyväksymisportit ovat kunnossa. Tavoite on välttää tilanne, jossa vastaus näyttäisi täsmälliseltä mutta perustuisi puuttuviin tai heikosti jäljitettäviin faktoihin.
 
 ## 4. Repojuuren tiedostot
 
@@ -209,6 +210,7 @@ src/cipp_contracts/
   extract/     lähdetiedostojen inventointi ja tekstin purku
   normalize/   asiakirjatekstin muuntaminen kanoniseksi malliksi
   load/        kanonisen mallin lataus PostgreSQL-tietokantaan
+  kg/          PostgreSQL-native knowledge graph -rakentaja
   price/       JV-urakan hinta-arviolaskenta
   validate/    canonical JSON -validointi
   embed/       varattu embedding-/vektorointikerrokselle
@@ -319,6 +321,18 @@ Hakua ja tulevaa RAG-käyttöä varten.
 - `rag.embeddings`: vektorihakua varten varattu embedding-taulu
 
 Tämä kerros on tarkoitettu kysymys-vastauslogiikan pohjaksi.
+
+### `kg`
+
+PostgreSQL-native knowledge graph -kerros.
+
+- `kg.entity_types`: sallittu entity-sanasto
+- `kg.relation_types`: sallittu relaatiosanasto
+- `kg.entities`: projektit, sopimukset, asiakirjat, osiot, ehdot, osapuolet, laajuudet, vaatimukset, maksuerät, tarkastukset, puutteet, vastaanotot ja tapahtumat graph-solmuina
+- `kg.relations`: todistettavat suhteet, kuten `HAS_CONTRACT`, `HAS_DOCUMENT`, `HAS_SECTION`, `REQUIRES`, `AFFECTS` ja `SUPPORTED_BY`
+- `kg.evidence`: linkit siihen, mistä entity tai relaatio syntyi
+
+Tämä kerros ei ole Neo4j, GraphDB eikä uusi palvelu. Se on relaatiotietokannan sisäinen suhdekerros, joka rakennetaan olemassa olevasta `core`, `doc`, `domain`, `finance`, `quality`, `ops` ja `raw` -datasta. `rag` hakee tekstikatkelmia; `kg` kertoo, miten sopimus, asiakirja, vaatimus, viemärisegmentti, maksuerä tai vastaanoton havainto liittyy toisiin tietoihin.
 
 ### `audit`
 
@@ -665,7 +679,7 @@ Mitä se tekee:
 - kirjoittaa faktakohtaisen lähdejäljen kevyenä `evidence_json`-rakenteena
 - antaa jokaiselle projektille `kg_readiness_status`-arvon: `ready`, `needs_review` tai `not_ready`
 
-Tämä on hyväksymisportti ennen knowledge graphia. Jos faktat eivät ole vielä selkeästi vertailukelpoisia ja jäljitettäviä, graafikerrosta ei pidä rakentaa.
+Tämä on hyväksymisportti ennen GraphRAG-/LLM-vastauskäyttöä. Jos faktat eivät ole vielä selkeästi vertailukelpoisia ja jäljitettäviä, graafia ei pidä käyttää vastausten perustana.
 
 ## 11. Load: kanonisesta mallista tietokantaan
 
@@ -717,7 +731,24 @@ Mitä se tekee:
 
 Tämä mahdollistaa dokumenttisisällön kysymisen, haun ja analysoinnin.
 
-## 12. Validate: laadunvarmistus
+## 12. KG: PostgreSQL-native knowledge graph
+
+### `src/cipp_contracts/kg/build_knowledge_graph.py`
+
+Rakentaa PostgreSQL:n sisäisen tietograafin olemassa olevista relaatiotauluista.
+
+Mitä se tekee:
+
+- varmistaa `kg`-skeeman olemassaolon migraatiosta `db/migrations/008_knowledge_graph.sql`
+- lukee projektit, sopimukset, osapuolet, asiakirjat, dokumenttiosiot, ehdot, urakkasisällöt, viemärisegmentit, vaatimukset, maksuerät, vakuudet, vakuutukset, operatiiviset tapahtumat, vastaanotot ja havainnot
+- lukee myös valinnaiset `quality.inspections`- ja `quality.defects`-taulut, jos ne ovat kannassa olemassa
+- muodostaa niistä `kg.entities`- ja `kg.relations`-rivit
+- tallentaa jokaiselle entitylle tai relaatiolle lähdejäljen `kg.evidence`-tauluun
+- toimii idempotentisti, eli sama ajo päivittää olemassa olevat solmut ja suhteet eikä monista niitä
+
+Tämä builder ei käytä LLM:ää eikä arvaa puuttuvia suhteita. Jos suhteelle ei löydy rakenteista riviä tai lähdejälkeä, sitä ei rakenneta.
+
+## 13. Validate: laadunvarmistus
 
 ### `src/cipp_contracts/validate/validate_canonical_contract.py`
 
@@ -734,7 +765,7 @@ Se tarkistaa esimerkiksi:
 
 Validointi ei ratkaise kaikkea, mutta se estää pahimmat rakenteelliset virheet ennen latausta.
 
-## 13. Price: JV-hinta-arvio
+## 14. Price: JV-hinta-arvio
 
 ### `src/cipp_contracts/price/estimate_jv_price.py`
 
@@ -762,7 +793,7 @@ Lisäksi käytetään kokemusperäistä haarukkaa:
 
 Moduuli voi myös tallentaa arvion `finance.price_estimates`-tauluun.
 
-## 14. Embed ja search
+## 15. Embed ja search
 
 ### `src/cipp_contracts/embed/`
 
@@ -785,7 +816,7 @@ Tuleva rooli:
 - hakea vastaukselle lähdekatkelmat
 - tukea CIPP-kysymys-vastauslogiikkaa
 
-## 15. SQL-kyselyt
+## 16. SQL-kyselyt
 
 ### `db/queries/search_full_text.sql`
 
@@ -817,7 +848,23 @@ Listaa projektien JV/SV-segmentit vertailtavassa järjestyksessä.
 
 Käyttö: kun vertaillaan projektien laajuutta yläjuoksulta alajuoksulle.
 
-## 16. Komentorivityökalut
+### `db/queries/kg_project_graph.sql`
+
+Näyttää yhden projektin KG-suhteet luettavana edge-listana.
+
+### `db/queries/kg_entity_neighborhood.sql`
+
+Näyttää yhden entityn lähisuhteet kumpaankin suuntaan.
+
+### `db/queries/kg_relation_evidence.sql`
+
+Näyttää relaation ja siihen liittyvän evidencen.
+
+### `db/queries/kg_project_readiness_summary.sql`
+
+Tiivistää projektikohtaisesti KG-solmut, suhteet ja evidence-kattavuuden.
+
+## 17. Komentorivityökalut
 
 `pyproject.toml` määrittää nämä komennot, kun paketti on asennettu kehitystilaan.
 
@@ -937,13 +984,25 @@ Raportin `kg_readiness_status` tarkoittaa:
 
 Maksuerät ovat oma tarkistuskerroksensa, koska maksuerätaulukko voi löytyä eri projekteissa eri dokumenttityypistä. `cipp-report-reference-facts` käyttää `payment_schedule_facts`-moduulia, joka etsii maksueriä ensin `finance.payment_schedule_items`-taulusta ja sen jälkeen `core.contract_documents`-, `doc.sections`-, `doc.clauses`- ja `raw.pages`-kerroksista. Discovery huomioi esimerkiksi maksuerätaulukot, urakkasopimukset, tarjoukset, sopimusehdot, liitteet, taloudelliset loppuselvitykset ja projektinhallintataulukot.
 
-Kun rivit löytyvät luotettavasti, ne tallennetaan idempotentisti `finance.payment_schedule_items`-tauluun ja niiden summa hyväksytään, jos se vastaa sopimushintaa enintään yhden euron pyöristystoleranssilla. Kaikissa projekteissa ei ole yhtä maksuerätaulukkoa: Kapytie15-tyyppinen `Maksuerät ja hyväksyntä` -kansio käsitellään invoice-based payment schedule -mallina, jossa erilliset laskut ja hyväksyntädokumentit voidaan koostaa samoiksi maksueräriveiksi.
+Kun rivit löytyvät luotettavasti, ne tallennetaan idempotentisti `finance.payment_schedule_items`-tauluun ja niiden summa hyväksytään, jos se vastaa sopimushintaa enintään yhden euron pyöristystoleranssilla. Kaikissa projekteissa ei ole yhtä maksuerätaulukkoa: erillinen lasku- ja hyväksyntäkansio käsitellään invoice-based payment schedule -mallina, jossa erilliset laskut ja hyväksyntädokumentit voidaan koostaa samoiksi maksueräriveiksi.
 
 Raportti näyttää erotuksen kentissä `payment_schedule_difference` ja `payment_schedule_difference_pct`. `payment_schedule_evidence_status` kertoo tilan: `structured_and_matches`, `structured_but_mismatch`, `invoice_documents_structured`, `invoice_documents_found_unstructured`, `found_unstructured` tai `not_found`. `found_unstructured` ja `invoice_documents_found_unstructured` jäävät `needs_review`-tilaan, koska taulukko, laskut tai maksuerämaininnat löytyvät mutta rivejä ei vielä voida poimia luotettavasti. `not_found` tarkoittaa ennen kaikkea discovery-logiikan puutetta. `next_blocker` näyttää ensimmäisen seuraavaksi korjattavan portin.
 
-Knowledge graphia ei aloiteta ennen tätä porttia, koska muuten graafi voisi näyttää valmiilta mutta sisältää puuttuvia tai heikosti todistettuja urakkafaktoja.
+PostgreSQL-native KG voidaan rakentaa olemassa olevista rakenteisista riveistä, mutta GraphRAG-/LLM-vastauskäyttöä ei aloiteta ennen tätä porttia, koska muuten vastaus voisi näyttää valmiilta mutta sisältää puuttuvia tai heikosti todistettuja urakkafaktoja.
 
-## 17. Tyypillinen uuden projektin käsittely
+### `cipp-build-knowledge-graph`
+
+Rakentaa PostgreSQL-native KG-kerroksen.
+
+```powershell
+cipp-build-knowledge-graph --all --dry-run
+cipp-build-knowledge-graph --all
+cipp-build-knowledge-graph --project-code reference_001 --prune
+```
+
+`--dry-run` tarkistaa rakentamisen ilman kirjoituksia. `--prune` poistaa valitun projektin vanhat KG-solmut ennen uudelleenrakennusta. `--all` rakentaa kaikki kannassa olevat referenssiprojektit.
+
+## 18. Tyypillinen uuden projektin käsittely
 
 Kun uusi hanke lisätään, tavoite on saada se samaan vertailukelpoiseen muotoon kuin aiemmat hankkeet.
 
@@ -964,7 +1023,7 @@ Tyypillinen eteneminen:
 
 Tärkeä periaate: kaikissa projekteissa ei ole samaa asiakirjakokonaisuutta, mutta samat olennaiset tiedot pyritään löytämään eri lähteistä. Tarjouspyyntö on yleensä paras lähde teknisille perustiedoille.
 
-## 18. Projektien vertailukelpoisuus
+## 19. Projektien vertailukelpoisuus
 
 Vertailukelpoisuus syntyy kolmesta asiasta:
 
@@ -980,7 +1039,7 @@ Esimerkki:
 
 Järjestelmän tehtävä on saada nämä eri lähteistä tulevat tiedot samaan rakenteeseen, jotta kysymykset voidaan vastata vertaamalla projekteja eikä vain lukemalla yksittäistä PDF:ää.
 
-## 19. Tärkeimmät CIPP-käsitteet repossa
+## 20. Tärkeimmät CIPP-käsitteet repossa
 
 ### JV-linjat
 
@@ -1023,7 +1082,7 @@ Vastaanotto on hetki, jossa urakoitsija luovuttaa työmaan takaisin taloyhtiön 
 - mitä maksueriä voidaan hyväksyä
 - mitä takuuajan asioita seurataan
 
-## 20. Testit
+## 21. Testit
 
 ### `tests/test_validate_canonical_contract.py`
 
@@ -1052,7 +1111,7 @@ Varmistaa JV-hinta-arvion peruslogiikan:
 
 Sisältää ensimmäiset arviointikysymykset Referenssikohde An aineistolle. Näiden avulla voidaan myöhemmin testata, osaako hakukerros löytää oikean lähdeasiakirjan.
 
-## 21. Mitä tiedostoja yleensä muokataan?
+## 22. Mitä tiedostoja yleensä muokataan?
 
 Kun lisätään uusi hanke:
 
@@ -1076,7 +1135,7 @@ Kun parannetaan käyttäjän kysymyksiin vastaamista:
 - rakennetaan hakukerrosta `search/`
 - lisätään eval-kysymyksiä `tests/eval_questions/`
 
-## 22. Mitä ei yleensä muokata käsin?
+## 23. Mitä ei yleensä muokata käsin?
 
 Näitä ei yleensä kannata muokata käsin:
 
@@ -1089,7 +1148,7 @@ Näitä ei yleensä kannata muokata käsin:
 
 Canonical JSONia voi tarkistaa käsin, mutta pitkällä aikavälillä tavoitteena on, että se syntyy mahdollisimman paljon parserien ja importerien kautta.
 
-## 23. Nykyiset tunnetut kehityskohdat
+## 24. Nykyiset tunnetut kehityskohdat
 
 ### Operatiivinen importer pitää vakioida
 
@@ -1127,7 +1186,7 @@ Tietokanta tukee jo pgvectoria, mutta varsinainen embedding-generointi ja semant
 
 PDF-putki on selkein. Jos projektien lisäaineistoissa on Word- tai Excel-tiedostoja, niille tarvitaan oma luotettava tekstin- ja taulukonpurku, jotta kokous-, vastaanotto- ja maksutiedot saadaan sisään yhtä hyvin kuin PDF:stä.
 
-## 24. Miten repo toimii käyttäjän kysymyksen kannalta?
+## 25. Miten repo toimii käyttäjän kysymyksen kannalta?
 
 Kun käyttäjä kysyy esimerkiksi:
 
@@ -1160,7 +1219,7 @@ Järjestelmän pitäisi hakea:
 
 Tavoite ei ole antaa pelkkää yleisvastausta, vaan vastata projektikokemuksen perusteella: mitä vastaavassa tilanteessa tehtiin, kuka vastasi, millä perusteella ja miten asia dokumentoitiin.
 
-## 25. Ytimeen tiivistettynä
+## 26. Ytimeen tiivistettynä
 
 Repo rakentaa CIPP-urakoista vertailukelpoisen tietokannan.
 

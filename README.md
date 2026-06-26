@@ -52,7 +52,7 @@ postgresql://cipp:<POSTGRES_PASSWORD>@localhost:55432/cipp_contracts
 ```text
 db/migrations        PostgreSQL-migraatiot
 db/queries           Manuaaliset tarkistus- ja hakukyselyt
-src/cipp_contracts   Python-työkalut importtiin, validointiin ja hakuun
+src/cipp_contracts   Python-työkalut importtiin, validointiin, KG:hen ja hakuun
 data/raw             Alkuperäinen aineisto, ei versionhallintaan
 data/extracted       PDF-purku, taulukot ja canonical JSON
 data/reports         Validointi-, PII- ja ekstraktioraportit
@@ -155,9 +155,9 @@ cipp-link-contract-documents --project reference_001
 cipp-load-markdown-sections --project reference_001 --input data\extracted\reference_001\markdown --ensure-raw-documents --prune-missing-markdown
 ```
 
-## Hyväksymisportit ennen knowledge graphia
+## Hyväksymisportit ennen GraphRAG-käyttöä
 
-Knowledge graph -kerrosta ei rakenneta ennen kuin kaksi porttia on kunnossa:
+PostgreSQL-native KG voidaan rakentaa rakenteisista tietokantariveistä. GraphRAG-/LLM-vastauskäyttöön sitä ei kuitenkaan oteta ennen kuin kaksi porttia on kunnossa:
 
 1. `cipp-report-processing-quality` varmistaa vakaan tekstikerroksen: lähdetiedostot, `raw.pages`, markdownit, `doc.sections`, `doc.clauses` ja viimeisimmät extractor-statukset.
 2. `cipp-report-reference-facts` tuottaa vertailufaktamatriisin ja `kg_readiness_status`-arvon jokaiselle referenssille.
@@ -168,8 +168,22 @@ Knowledge graph -kerrosta ei rakenneta ennen kuin kaksi porttia on kunnossa:
 
 Maksueriä käsitellään erikseen, koska maksuerätaulukko voi löytyä eri projekteissa eri asiakirjasta. Discovery-logiikka etsii maksueriä `finance.payment_schedule_items`-riveistä, sopimusasiakirjoista, `doc.sections`- ja `doc.clauses`-teksteistä sekä `raw.pages`-kerroksesta. Jos luotettavat rivit löytyvät, raportti tallentaa ne idempotentisti `finance.payment_schedule_items`-tauluun, laskee `payment_schedule_total`-summan, vertaa sitä sopimushintaan yhden euron pyöristystoleranssilla ja näyttää erotuksen kentissä `payment_schedule_difference` ja `payment_schedule_difference_pct`.
 
-Kaikissa projekteissa maksuerät eivät ole yhtenä maksuerätaulukkona. Kapytie15-tyyppinen kansio `Maksuerät ja hyväksyntä` käsitellään invoice-based payment schedule -mallina: erilliset laskut ja hyväksyntädokumentit voidaan koostaa samaksi `finance.payment_schedule_items`-kerrokseksi, jos eränumero, summa ja evidence saadaan luotettavasti ulos.
+Kaikissa projekteissa maksuerät eivät ole yhtenä maksuerätaulukkona. Erillinen lasku- ja hyväksyntäkansio käsitellään invoice-based payment schedule -mallina: erilliset laskut ja hyväksyntädokumentit voidaan koostaa samaksi `finance.payment_schedule_items`-kerrokseksi, jos eränumero, summa ja evidence saadaan luotettavasti ulos.
 
-`payment_schedule_evidence_status` kertoo maksuerien tilan: `structured_and_matches`, `structured_but_mismatch`, `invoice_documents_structured`, `invoice_documents_found_unstructured`, `found_unstructured` tai `not_found`. `found_unstructured` tarkoittaa, että maksuerätaulukko tai maksuerämaininta löytyy tekstistä, mutta rivejä ei vielä voida poimia luotettavasti. `not_found` tarkoittaa nykyisen discovery-logiikan puutetta eikä todista, ettei aineistossa olisi taulukkoa. Knowledge graphia ei aloiteta ennen kuin maksuerätaulukot ja niihin liittyvä evidence ovat kunnossa kaikille referensseille tai poikkeama on dokumentoitu.
+`payment_schedule_evidence_status` kertoo maksuerien tilan: `structured_and_matches`, `structured_but_mismatch`, `invoice_documents_structured`, `invoice_documents_found_unstructured`, `found_unstructured` tai `not_found`. `found_unstructured` tarkoittaa, että maksuerätaulukko tai maksuerämaininta löytyy tekstistä, mutta rivejä ei vielä voida poimia luotettavasti. `not_found` tarkoittaa nykyisen discovery-logiikan puutetta eikä todista, ettei aineistossa olisi taulukkoa. PostgreSQL-native KG voidaan rakentaa olemassa olevista rakenteisista riveistä, mutta GraphRAG-/LLM-käyttöön sitä ei pidä käyttää ennen kuin maksuerätaulukot ja niihin liittyvä evidence ovat kunnossa kaikille referensseille tai poikkeama on dokumentoitu.
+
+## PostgreSQL-native knowledge graph
+
+`kg`-kerros mallintaa todistettavia suhteita projektien, sopimusten, asiakirjojen, osapuolten, laajuuksien, viemärisegmenttien, vaatimusten, maksuerien ja vastaanoton välillä. Se käyttää nykyistä PostgreSQL-kantaa eikä lisää Neo4j:tä, GraphDB:tä tai muuta infraa.
+
+RAG ja KG ovat eri asioita: `rag` hakee tekstikatkelmia, kun taas `kg` mallintaa suhteita kuten `project HAS_CONTRACT contract`, `document HAS_SECTION section` ja `payment_item SUPPORTED_BY document`. KG-builder käyttää vain olemassa olevaa rakenteista dataa ja source/evidence-kerrosta. Se ei tee LLM-arvauksia.
+
+```powershell
+cipp-build-knowledge-graph --all --dry-run
+cipp-build-knowledge-graph --all
+cipp-build-knowledge-graph --project-code reference_001 --prune
+```
+
+Jokaiselle entitylle tai relaatiolle pyritään tallentamaan evidence `kg.evidence`-tauluun esimerkiksi `source_table/source_id`-, `source_file_id`-, `section_id`- tai `clause_id`-viitteellä. Tätä PostgreSQL-native KG:tä käytetään myöhemmin GraphRAG-/hybrid retrieval -vaiheessa rajaamaan ja perustelemaan hakuja, mutta graafiin ei tallenneta suhteita ilman jäljitettävää alkuperää.
 
 
