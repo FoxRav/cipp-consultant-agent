@@ -26,6 +26,7 @@ cipp-enrich-canonical = "cipp_contracts.normalize.enrich_canonical_from_markdown
 cipp-build-markdown = "cipp_contracts.extract.build_markdown:main"
 cipp-extract-pdf-pages = "cipp_contracts.extract.extract_pdf_pages:main"
 cipp-import-finlex-legal-xml = "cipp_contracts.extract.import_finlex_legal_xml:main"
+cipp-import-project-operations = "cipp_contracts.extract.import_project_operations:main"
 cipp-inventory-source-files = "cipp_contracts.extract.inventory_source_files:main"
 cipp-link-contract-documents = "cipp_contracts.load.link_contract_documents:main"
 cipp-load-markdown-sections = "cipp_contracts.load.load_markdown_sections:main"
