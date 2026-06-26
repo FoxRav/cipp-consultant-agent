@@ -22,6 +22,21 @@ PAYMENT_TERMS = [
     "%",
 ]
 
+PAYMENT_PATH_TERMS = [
+    "maksuerät ja hyväksyntä",
+    "maksuerat ja hyvaksyn",
+    "maksuerä",
+    "maksuerät",
+    "maksuerat",
+    "hyväksyntä",
+    "hyvaksyn",
+    "lasku",
+    "laskutus",
+    "maksuposti",
+    "erä",
+    "era",
+]
+
 PAYMENT_DOCUMENT_TYPES = {
     "payment_schedule",
     "contractor_offer",
@@ -38,6 +53,7 @@ PAYMENT_DOCUMENT_TYPES = {
 MONEY_PATTERN = re.compile(r"-?\d+(?:[ .]\d{3})*(?:[,.]\d+)?")
 ITEM_TOKEN_PATTERN = re.compile(r"^\s*(?P<item>\d{1,2})(?:\.\s*)?(?:erä|era)\b", re.I)
 INTEGER_TOKEN_PATTERN = re.compile(r"^\s*(?P<item>\d{1,2})\s*$")
+DATE_PATTERN = re.compile(r"\d{1,2}[./-]\d{1,2}[./-]\d{2,4}")
 
 
 @dataclass(frozen=True)
@@ -49,6 +65,7 @@ class PaymentScheduleSource:
     source_label: str
     text: str
     page_no: int | None = None
+    source_path: str | None = None
 
 
 @dataclass(frozen=True)
@@ -86,6 +103,13 @@ class ParsedPaymentSchedule:
 def contains_payment_terms(text: str) -> bool:
     lower = text.lower()
     return any(term in lower for term in PAYMENT_TERMS)
+
+
+def looks_like_payment_path(value: str | None) -> bool:
+    if not value:
+        return False
+    normalized = _fold_text(value)
+    return any(term in normalized for term in PAYMENT_PATH_TERMS)
 
 
 def parse_payment_schedule_text(
@@ -126,7 +150,11 @@ def parse_payment_schedule_text(
 
 
 def should_insert_discovered_schedule(existing_count: int, parsed: ParsedPaymentSchedule) -> bool:
-    return existing_count == 0 and parsed.status == "structured" and len(parsed.items) >= 2
+    return (
+        existing_count == 0
+        and parsed.status in {"structured", "invoice_documents_structured"}
+        and len(parsed.items) >= 2
+    )
 
 
 def ensure_payment_schedule_items(
@@ -166,12 +194,18 @@ def discover_payment_schedule(
     contract_id: Any,
 ) -> ParsedPaymentSchedule:
     unstructured: ParsedPaymentSchedule | None = None
+    invoice_sources: list[PaymentScheduleSource] = []
     for source in discover_payment_schedule_sources(conn, project_code, contract_id):
+        if _looks_like_invoice_source(source):
+            invoice_sources.append(source)
         parsed = parse_payment_schedule_text(source.text, source)
         if parsed.status == "structured":
             return parsed
         if parsed.status == "found_unstructured" and unstructured is None:
             unstructured = parsed
+    invoice_schedule = parse_invoice_document_schedule(invoice_sources)
+    if invoice_schedule.status in {"invoice_documents_structured", "invoice_documents_found_unstructured"}:
+        return invoice_schedule
     return unstructured or ParsedPaymentSchedule(
         status="not_found",
         reason="Payment schedule was not found in finance, contract documents, doc text, or raw pages.",
@@ -184,11 +218,73 @@ def discover_payment_schedule_sources(
     contract_id: Any,
 ) -> list[PaymentScheduleSource]:
     patterns = [f"%{term}%" for term in PAYMENT_TERMS]
+    path_patterns = [f"%{term}%" for term in PAYMENT_PATH_TERMS]
     sources: list[PaymentScheduleSource] = []
-    sources.extend(_doc_section_sources(conn, project_code, patterns))
-    sources.extend(_doc_clause_sources(conn, project_code, patterns))
-    sources.extend(_raw_page_sources(conn, project_code, patterns))
+    sources.extend(_doc_section_sources(conn, project_code, patterns, path_patterns))
+    sources.extend(_doc_clause_sources(conn, project_code, patterns, path_patterns))
+    sources.extend(_raw_page_sources(conn, project_code, patterns, path_patterns))
     return sorted(sources, key=_source_rank)
+
+
+def parse_invoice_document_schedule(
+    sources: list[PaymentScheduleSource],
+) -> ParsedPaymentSchedule:
+    items_by_no: dict[int, ParsedPaymentScheduleItem] = {}
+    found_invoice_like = False
+    for source in sources:
+        item = parse_invoice_payment_item(source.text, source)
+        if item:
+            existing = items_by_no.get(item.item_no)
+            if existing is None or _source_rank(source) < _source_rank(existing.source):
+                items_by_no[item.item_no] = item
+        elif _looks_like_invoice_source(source):
+            found_invoice_like = True
+
+    if len(items_by_no) >= 2:
+        items = [items_by_no[key] for key in sorted(items_by_no)]
+        return ParsedPaymentSchedule(
+            status="invoice_documents_structured",
+            items=items,
+            source=items[0].source,
+            reason=f"Structured {len(items)} payment items from separate invoice/approval documents.",
+        )
+    if found_invoice_like or items_by_no:
+        return ParsedPaymentSchedule(
+            status="invoice_documents_found_unstructured",
+            source=next(iter(items_by_no.values())).source if items_by_no else (sources[0] if sources else None),
+            reason=(
+                "Invoice/approval payment documents were found, but not enough reliable "
+                "payment rows could be structured."
+            ),
+        )
+    return ParsedPaymentSchedule(status="not_found", reason="No invoice payment documents found.")
+
+
+def parse_invoice_payment_item(
+    text: str,
+    source: PaymentScheduleSource | None = None,
+) -> ParsedPaymentScheduleItem | None:
+    if not text or not (_looks_like_invoice_source(source) or contains_payment_terms(text)):
+        return None
+    normalized = _normalize_text(text)
+    item_no = _invoice_item_no(normalized, source)
+    if item_no is None:
+        return None
+    amounts = _amounts_from_cells([normalized])
+    money = _infer_invoice_money(amounts)
+    if not money:
+        return None
+    net, vat, gross = money
+    return ParsedPaymentScheduleItem(
+        item_no=item_no,
+        description=_invoice_description(normalized, item_no),
+        amount_net=net,
+        vat_amount=vat,
+        amount_gross=gross,
+        vat_rate=_vat_rate(net, vat),
+        confidence="medium_high" if source and looks_like_payment_path(source.source_path) else "medium",
+        source=source,
+    )
 
 
 def _parse_pipe_rows(
@@ -306,6 +402,7 @@ def _doc_section_sources(
     conn: psycopg.Connection[Any],
     project_code: str,
     patterns: list[str],
+    path_patterns: list[str],
 ) -> list[PaymentScheduleSource]:
     rows = conn.execute(
         """
@@ -315,15 +412,22 @@ def _doc_section_sources(
             cd.document_type,
             coalesce(ds.title, cd.document_title_redacted) AS source_label,
             ds.body_text AS text,
-            ds.page_start AS page_no
+            ds.page_start AS page_no,
+            sf.stored_path
         FROM doc.sections ds
         JOIN core.contract_documents cd ON cd.id = ds.contract_document_id
         JOIN core.contracts c ON c.id = cd.contract_id
         JOIN core.projects p ON p.id = c.project_id
+        LEFT JOIN raw.source_files sf ON sf.id = cd.source_file_id
         WHERE p.project_code = %s
-          AND ds.body_text ILIKE ANY(%s)
+          AND (
+            ds.body_text ILIKE ANY(%s)
+            OR cd.document_title_redacted ILIKE ANY(%s)
+            OR sf.original_filename ILIKE ANY(%s)
+            OR sf.stored_path ILIKE ANY(%s)
+          )
         """,
-        (project_code, patterns),
+        (project_code, patterns, path_patterns, path_patterns, path_patterns),
     ).fetchall()
     return [
         PaymentScheduleSource(
@@ -334,6 +438,7 @@ def _doc_section_sources(
             source_label=row["source_label"],
             text=row["text"],
             page_no=row["page_no"],
+            source_path=row["stored_path"],
         )
         for row in rows
     ]
@@ -343,6 +448,7 @@ def _doc_clause_sources(
     conn: psycopg.Connection[Any],
     project_code: str,
     patterns: list[str],
+    path_patterns: list[str],
 ) -> list[PaymentScheduleSource]:
     rows = conn.execute(
         """
@@ -352,16 +458,23 @@ def _doc_clause_sources(
             cd.document_type,
             coalesce(dc.title, ds.title, cd.document_title_redacted) AS source_label,
             dc.clause_text AS text,
-            dc.source_page AS page_no
+            dc.source_page AS page_no,
+            sf.stored_path
         FROM doc.clauses dc
         JOIN doc.sections ds ON ds.id = dc.section_id
         JOIN core.contract_documents cd ON cd.id = ds.contract_document_id
         JOIN core.contracts c ON c.id = cd.contract_id
         JOIN core.projects p ON p.id = c.project_id
+        LEFT JOIN raw.source_files sf ON sf.id = cd.source_file_id
         WHERE p.project_code = %s
-          AND dc.clause_text ILIKE ANY(%s)
+          AND (
+            dc.clause_text ILIKE ANY(%s)
+            OR cd.document_title_redacted ILIKE ANY(%s)
+            OR sf.original_filename ILIKE ANY(%s)
+            OR sf.stored_path ILIKE ANY(%s)
+          )
         """,
-        (project_code, patterns),
+        (project_code, patterns, path_patterns, path_patterns, path_patterns),
     ).fetchall()
     return [
         PaymentScheduleSource(
@@ -372,6 +485,7 @@ def _doc_clause_sources(
             source_label=row["source_label"],
             text=row["text"],
             page_no=row["page_no"],
+            source_path=row["stored_path"],
         )
         for row in rows
     ]
@@ -381,6 +495,7 @@ def _raw_page_sources(
     conn: psycopg.Connection[Any],
     project_code: str,
     patterns: list[str],
+    path_patterns: list[str],
 ) -> list[PaymentScheduleSource]:
     rows = conn.execute(
         """
@@ -390,14 +505,19 @@ def _raw_page_sources(
             coalesce(cd.document_type, sf.document_type) AS document_type,
             sf.original_filename AS source_label,
             rp.raw_text AS text,
-            rp.page_no
+            rp.page_no,
+            sf.stored_path
         FROM raw.pages rp
         JOIN raw.source_files sf ON sf.id = rp.source_file_id
         LEFT JOIN core.contract_documents cd ON cd.source_file_id = sf.id
         WHERE sf.project_code = %s
-          AND rp.raw_text ILIKE ANY(%s)
+          AND (
+            rp.raw_text ILIKE ANY(%s)
+            OR sf.original_filename ILIKE ANY(%s)
+            OR sf.stored_path ILIKE ANY(%s)
+          )
         """,
-        (project_code, patterns),
+        (project_code, patterns, path_patterns, path_patterns),
     ).fetchall()
     return [
         PaymentScheduleSource(
@@ -410,14 +530,19 @@ def _raw_page_sources(
             source_label=row["source_label"],
             text=row["text"] or "",
             page_no=row["page_no"],
+            source_path=row["stored_path"],
         )
         for row in rows
     ]
 
 
 def _source_rank(source: PaymentScheduleSource) -> tuple[int, int, str]:
+    if source is None:
+        return 99, 99, ""
     document_type = source.document_type or ""
-    if document_type == "payment_schedule":
+    if _looks_like_invoice_source(source):
+        doc_rank = 0
+    elif document_type == "payment_schedule":
         doc_rank = 0
     elif document_type in {"financial_final_report", "financial_tracking", "project_management_table"}:
         doc_rank = 1
@@ -427,6 +552,14 @@ def _source_rank(source: PaymentScheduleSource) -> tuple[int, int, str]:
         doc_rank = 3
     layer_rank = {"doc.sections": 0, "doc.clauses": 1, "raw.pages": 2}.get(source.source_layer, 9)
     return doc_rank, layer_rank, source.source_label
+
+
+def _looks_like_invoice_source(source: PaymentScheduleSource | None) -> bool:
+    if source is None:
+        return False
+    if source.document_type == "payment_approval":
+        return True
+    return looks_like_payment_path(source.source_path) or looks_like_payment_path(source.source_label)
 
 
 def _next_pipe_row_index(cells: list[str], start: int) -> int:
@@ -483,7 +616,8 @@ def _looks_like_payment_description(cell: str) -> bool:
 def _amounts_from_cells(cells: list[str]) -> list[Decimal]:
     amounts: list[Decimal] = []
     for cell in cells:
-        for raw in MONEY_PATTERN.findall(cell):
+        scrubbed = DATE_PATTERN.sub(" ", cell)
+        for raw in MONEY_PATTERN.findall(scrubbed):
             value = _decimal(raw)
             if value is None:
                 continue
@@ -491,6 +625,53 @@ def _amounts_from_cells(cells: list[str]) -> list[Decimal]:
                 continue
             amounts.append(value)
     return amounts
+
+
+def _infer_invoice_money(amounts: list[Decimal]) -> tuple[Decimal, Decimal | None, Decimal | None] | None:
+    if len(amounts) < 2:
+        return None
+    for window_size in range(min(6, len(amounts)), 2, -1):
+        window = amounts[-window_size:]
+        money = _infer_money_triplet(window)
+        if money:
+            return money
+    return _infer_money_triplet(amounts)
+
+
+def _invoice_item_no(text: str, source: PaymentScheduleSource | None) -> int | None:
+    candidates = [
+        r"maksuer[äa]\s*(?:nro|numero|n:o)?\s*(\d{1,2})",
+        r"maksuposti\s*(?:nro|numero|n:o)?\s*(\d{1,2})",
+        r"\b(\d{1,2})\.\s*(?:erä|era)\b",
+    ]
+    search_text = " ".join(
+        part
+        for part in (
+            source.source_label if source else None,
+            source.source_path if source else None,
+            text[:500],
+        )
+        if part
+    )
+    folded = _fold_text(search_text)
+    for pattern in candidates:
+        match = re.search(pattern, folded, flags=re.I)
+        if match:
+            return int(match.group(1))
+    return None
+
+
+def _invoice_description(text: str, item_no: int) -> str:
+    match = re.search(
+        r"((?:maksuer[äa]|maksuposti|er[äa])\s*(?:nro|numero|n:o)?\s*"
+        + re.escape(str(item_no))
+        + r"[^.|\n]{0,180})",
+        text,
+        flags=re.I,
+    )
+    if match:
+        return " ".join(match.group(1).split())
+    return f"Invoice-based payment item {item_no}"
 
 
 def _infer_money_triplet(amounts: list[Decimal]) -> tuple[Decimal, Decimal | None, Decimal | None] | None:
@@ -559,6 +740,16 @@ def _normalize_text(text: str) -> str:
         .replace("\u2013", "-")
         .replace("\u2014", "-")
         .replace("\xa0", " ")
+    )
+
+
+def _fold_text(text: str) -> str:
+    return (
+        _normalize_text(text)
+        .lower()
+        .replace("ä", "a")
+        .replace("ö", "o")
+        .replace("å", "a")
     )
 
 

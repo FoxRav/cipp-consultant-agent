@@ -661,8 +661,15 @@ def _add_finance(
     facts.values["payment_schedule_difference"] = money(difference)
     facts.values["payment_schedule_difference_pct"] = money(difference_pct)
     if matches is True:
-        payment_status = "structured_and_matches"
-        payment_reason = "Structured payment schedule total matches contract price within 1.00 EUR."
+        if discovered_schedule and discovered_schedule.status == "invoice_documents_structured":
+            payment_status = "invoice_documents_structured"
+            payment_reason = (
+                "Separate invoice/approval documents were structured and their total matches "
+                "contract price within 1.00 EUR."
+            )
+        else:
+            payment_status = "structured_and_matches"
+            payment_reason = "Structured payment schedule total matches contract price within 1.00 EUR."
     elif matches is False:
         payment_status = "structured_but_mismatch"
         payment_reason = (
