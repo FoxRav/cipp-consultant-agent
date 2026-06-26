@@ -101,7 +101,7 @@ def test_render_markdown_contains_fixture_project_and_evidence() -> None:
             "payment_schedule_matches_contract_price": True,
             "payment_schedule_difference": "0.00",
             "payment_schedule_difference_pct": "0.00",
-            "payment_schedule_evidence_status": "structured_match",
+            "payment_schedule_evidence_status": "structured_and_matches",
             "payment_schedule_readiness_reason": "Structured payment schedule total matches.",
             "price_per_apartment": "10000.00",
             "missing_fields": "",

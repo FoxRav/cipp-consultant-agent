@@ -13,6 +13,7 @@ from psycopg.rows import dict_row
 
 from cipp_contracts.config import database_url
 from cipp_contracts.extract.report_processing_quality import project_summary
+from cipp_contracts.normalize.payment_schedule_facts import ensure_payment_schedule_items
 
 
 FACT_FIELDS = [
@@ -586,7 +587,9 @@ def _add_finance(
 
     payment_total = None
     payment_item_count = 0
+    discovered_schedule = None
     if contract_id:
+        discovered_schedule = ensure_payment_schedule_items(conn, project_code, contract_id)
         payment_row = _fetch_one(
             conn,
             """
@@ -624,21 +627,19 @@ def _add_finance(
             facts.weak_evidence_fields.extend(
                 ["payment_schedule_total", "payment_schedule_matches_contract_price"]
             )
-        elif payment_doc_found:
-            payment_status = "document_present_not_structured"
-            payment_reason = (
-                "Payment schedule document is linked, but no reliable structured payment rows "
-                "were found yet."
-            )
+        elif discovered_schedule and discovered_schedule.status == "found_unstructured":
+            payment_status = "found_unstructured"
+            payment_reason = discovered_schedule.reason
             facts.weak_evidence_fields.extend(
                 ["payment_schedule_total", "payment_schedule_matches_contract_price"]
             )
         else:
-            payment_status = "no_payment_schedule_source"
+            payment_status = "not_found"
             payment_reason = (
-                "No payment schedule document or structured rows are linked; comparison is "
-                "visible but non-blocking for this readiness gate."
+                "Payment schedule was not found by current discovery logic; this likely means "
+                "recognition is incomplete, not that the project lacks the table."
             )
+            facts.weak_evidence_fields.append("payment_schedule_matches_contract_price")
     else:
         payment_status = "structured_total"
         payment_reason = "Structured payment schedule total is available."
@@ -660,10 +661,10 @@ def _add_finance(
     facts.values["payment_schedule_difference"] = money(difference)
     facts.values["payment_schedule_difference_pct"] = money(difference_pct)
     if matches is True:
-        payment_status = "structured_match"
+        payment_status = "structured_and_matches"
         payment_reason = "Structured payment schedule total matches contract price within 1.00 EUR."
     elif matches is False:
-        payment_status = "structured_mismatch"
+        payment_status = "structured_but_mismatch"
         payment_reason = (
             "Structured payment schedule total differs from contract price by "
             f"{money(difference)} EUR ({money(difference_pct)}%)."
