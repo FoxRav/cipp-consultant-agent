@@ -31,7 +31,56 @@ data/raw
   -> analyysi, vertailu, hinta-arviot ja kysymys-vastauslogiikka
 ```
 
-## 2. Repojuuren tiedostot
+## 2. Nykytila 2026-06-26
+
+Tässä vaiheessa repo ei ole enää pelkkä suunnitelma, vaan toimiva paikallinen ETL- ja analyysipohja. Tietokannassa on kuusi referenssiprojektia, yhteiset sopimusehdot ja rakentamisen lakiaineiston ylätaso.
+
+Nykyinen käsittelytilanne:
+
+```text
+referenssiprojektit: 6
+lähdetiedostot tietokannassa: 413
+raw.pages-tekstitietueet: 952
+Office-tekstipurku: käytössä
+LibreOffice-muunnos: käytössä
+visuaalinen OCR: käytössä
+DWG -> PDF -muunnos: käytössä
+```
+
+Projektikohtainen tekstikerros:
+
+| Referenssi | Lähdetiedostot | Tekstitietueet |
+|---|---:|---:|
+| Referenssikohde A | 123 | 232 |
+| Referenssikohde B | 62 | 256 |
+| Referenssikohde C | 63 | 146 |
+| Referenssikohde D | 16 | 41 |
+| Referenssikohde E | 82 | 160 |
+| Referenssikohde F | 67 | 117 |
+
+Tärkeät viimeisimmät edistysaskeleet:
+
+- kuvat ja skannit on ajettu visuaalisen OCR:n läpi
+- DWG-piirustukset muunnetaan Autodesk DWG TrueView 2027:llä PDF-muotoon
+- DWG:stä syntyvät PDF:t rekisteröidään johdannaisiksi lähdetiedostoiksi `raw.source_files`-tauluun
+- DWG-PDF:t voidaan OCR-käsitellä rajatusti `--pdf-only`- ja `--notes-contains`-lipuilla
+- raw-kerroksessa on nyt tarpeeksi tekstisisältöä seuraavaan normalisointi- ja vertailuvaiheeseen
+
+Audit-huomio: `raw.extraction_runs` säilyttää myös epäonnistuneet testi- ja kokeiluajot. Niitä ei pidä tulkita suoraan nykyiseksi virhetilaksi. Laaturaportin pitää erottaa viimeisin onnistunut käsittely historiassa olevista aiemmista epäonnistumisista.
+
+## 3. Seuraava etenemissuunnitelma
+
+Seuraavat kehitysaskeleet tehdään tässä järjestyksessä:
+
+1. **Käsittelyn laaturaportti.** Rakennetaan komento, joka näyttää projektikohtaisesti tiedostomäärät, tekstisivut, uusimmat onnistuneet purut, epäonnistuneet ajot, OCR-tarpeet ja puuttuvat tekstit.
+2. **Markdown- ja section-kerroksen päivitys.** Päivitetään `data/extracted/.../markdown` ja `doc.sections`, jotta OCR- ja DWG-peräiset tekstit tulevat mukaan hakuun.
+3. **Projektifaktojen rikastus.** Poimitaan jokaisesta hankkeesta samat vertailukentät: asuntojen määrä, JV/SV-laajuus, pystylinjat, pohjaviemärit, tonttilinjat, hinnat, lisätyöt, vastaanotto, puutteet, takuu ja videotarkastukset.
+4. **Vertailukelpoisuusmatriisi.** Rakennetaan raportti, jossa jokainen referenssi näkyy samoilla sarakkeilla ja puuttuvat tiedot erottuvat.
+5. **Ensimmäinen kysely-MVP.** Käyttäjä antaa taloyhtiön tiedot, järjestelmä valitsee lähimmän referenssikohteen ja antaa alustavan hinta-/riskikommentin lähdeaineiston perusteella.
+
+Tämän suunnitelman seuraava konkreettinen toteutettava osa on käsittelyn laaturaportti.
+
+## 4. Repojuuren tiedostot
 
 ### `README.md`
 
@@ -117,7 +166,7 @@ F:\-DEV-\95.Kuvien-parsinta-SOTA\.venv\Scripts\kuvien-parsinta.exe
 
 Tähän repoon ei kopioida raskaita OCR-mallipainoja tai vanhan OCR-repon ympäristöä. Sen sijaan tähän repoon on lisätty adapteri, joka käyttää valmista pipelinea ja tallentaa tuloksen tämän projektin tietokantamalliin.
 
-## 3. Kansiorakenne
+## 5. Kansiorakenne
 
 ### `data/`
 
@@ -168,7 +217,7 @@ src/cipp_contracts/
 
 Automaattitestit tärkeimmälle logiikalle. Testit ovat pieni mutta tärkeä turvaverkko: ne varmistavat, että tarjouspyyntöjen faktaparseri, canonical-validointi ja JV-hintalogiikka eivät hajoa huomaamatta.
 
-## 4. Tietokannan pääajatus
+## 6. Tietokannan pääajatus
 
 Tietokanta on jaettu skeemoihin, jotta eri tietotyypit eivät mene sekaisin.
 
@@ -296,7 +345,7 @@ Tähän kokonaisuuteen kuuluvat käsitteellisesti esimerkiksi:
 
 Tärkeä nykytilahuomio: osa tästä operatiivisesta kerroksesta on syntynyt projektin aikana tietokantaan suoraan. Se kannattaa seuraavaksi vakioida omaksi migraatioksi ja Python-importeriksi, jotta sama prosessi voidaan ajaa kaikille uusille hankkeille samalla tavalla.
 
-## 5. Migraatiot
+## 7. Migraatiot
 
 Migraatiot ovat `db/migrations/`-kansiossa. Docker ajaa ne aakkos-/numerojärjestyksessä, kun tietokantavolyymi luodaan ensimmäisen kerran.
 
@@ -365,7 +414,7 @@ SV-järjestelmä kuvataan vastaavasti:
 
 Tauluun tallennetaan myös kuuluuko segmentti urakkaan, miten varma tulkinta on, mikä on urakkaraja ja mikä on hinnallinen vaikutus.
 
-## 6. Python-koodin yhteiset perustiedostot
+## 8. Python-koodin yhteiset perustiedostot
 
 ### `src/cipp_contracts/config.py`
 
@@ -402,7 +451,7 @@ Sisältää esimerkiksi:
 
 Tämä vähentää sitä, että samat merkkijonot ja validointisäännöt kopioituisivat moneen paikkaan.
 
-## 7. Extract: lähteistä tekstiksi
+## 9. Extract: lähteistä tekstiksi
 
 ### `src/cipp_contracts/extract/inventory_source_files.py`
 
@@ -518,7 +567,7 @@ Mitä se tekee:
 
 Tämä on tärkeää siksi, että lait käsitellään samassa järjestelmässä kuin sopimukset, mutta yhteisenä ylätason aineistona.
 
-## 8. Normalize: tekstistä kanoniseksi malliksi
+## 10. Normalize: tekstistä kanoniseksi malliksi
 
 ### `src/cipp_contracts/normalize/build_canonical_contract.py`
 
@@ -599,7 +648,7 @@ Mitä se tekee:
 
 Tätä käytetään, kun halutaan tehdä projektien perusfaktoista vertailukelpoisia.
 
-## 9. Load: kanonisesta mallista tietokantaan
+## 11. Load: kanonisesta mallista tietokantaan
 
 ### `src/cipp_contracts/load/load_contract_package.py`
 
@@ -646,7 +695,7 @@ Mitä se tekee:
 
 Tämä mahdollistaa dokumenttisisällön kysymisen, haun ja analysoinnin.
 
-## 10. Validate: laadunvarmistus
+## 12. Validate: laadunvarmistus
 
 ### `src/cipp_contracts/validate/validate_canonical_contract.py`
 
@@ -663,7 +712,7 @@ Se tarkistaa esimerkiksi:
 
 Validointi ei ratkaise kaikkea, mutta se estää pahimmat rakenteelliset virheet ennen latausta.
 
-## 11. Price: JV-hinta-arvio
+## 13. Price: JV-hinta-arvio
 
 ### `src/cipp_contracts/price/estimate_jv_price.py`
 
@@ -691,7 +740,7 @@ Lisäksi käytetään kokemusperäistä haarukkaa:
 
 Moduuli voi myös tallentaa arvion `finance.price_estimates`-tauluun.
 
-## 12. Embed ja search
+## 14. Embed ja search
 
 ### `src/cipp_contracts/embed/`
 
@@ -714,7 +763,7 @@ Tuleva rooli:
 - hakea vastaukselle lähdekatkelmat
 - tukea CIPP-kysymys-vastauslogiikkaa
 
-## 13. SQL-kyselyt
+## 15. SQL-kyselyt
 
 ### `db/queries/search_full_text.sql`
 
@@ -746,7 +795,7 @@ Listaa projektien JV/SV-segmentit vertailtavassa järjestyksessä.
 
 Käyttö: kun vertaillaan projektien laajuutta yläjuoksulta alajuoksulle.
 
-## 14. Komentorivityökalut
+## 16. Komentorivityökalut
 
 `pyproject.toml` määrittää nämä komennot, kun paketti on asennettu kehitystilaan.
 
@@ -840,7 +889,7 @@ Tuo lakiaineiston Finlex XML -lähteestä.
 cipp-import-finlex-legal-xml --source-dir data/raw/Rakentamisen_Lait
 ```
 
-## 15. Tyypillinen uuden projektin käsittely
+## 17. Tyypillinen uuden projektin käsittely
 
 Kun uusi hanke lisätään, tavoite on saada se samaan vertailukelpoiseen muotoon kuin aiemmat hankkeet.
 
@@ -861,7 +910,7 @@ Tyypillinen eteneminen:
 
 Tärkeä periaate: kaikissa projekteissa ei ole samaa asiakirjakokonaisuutta, mutta samat olennaiset tiedot pyritään löytämään eri lähteistä. Tarjouspyyntö on yleensä paras lähde teknisille perustiedoille.
 
-## 16. Projektien vertailukelpoisuus
+## 18. Projektien vertailukelpoisuus
 
 Vertailukelpoisuus syntyy kolmesta asiasta:
 
@@ -877,7 +926,7 @@ Esimerkki:
 
 Järjestelmän tehtävä on saada nämä eri lähteistä tulevat tiedot samaan rakenteeseen, jotta kysymykset voidaan vastata vertaamalla projekteja eikä vain lukemalla yksittäistä PDF:ää.
 
-## 17. Tärkeimmät CIPP-käsitteet repossa
+## 19. Tärkeimmät CIPP-käsitteet repossa
 
 ### JV-linjat
 
@@ -920,7 +969,7 @@ Vastaanotto on hetki, jossa urakoitsija luovuttaa työmaan takaisin taloyhtiön 
 - mitä maksueriä voidaan hyväksyä
 - mitä takuuajan asioita seurataan
 
-## 18. Testit
+## 20. Testit
 
 ### `tests/test_validate_canonical_contract.py`
 
@@ -949,7 +998,7 @@ Varmistaa JV-hinta-arvion peruslogiikan:
 
 Sisältää ensimmäiset arviointikysymykset Referenssikohde An aineistolle. Näiden avulla voidaan myöhemmin testata, osaako hakukerros löytää oikean lähdeasiakirjan.
 
-## 19. Mitä tiedostoja yleensä muokataan?
+## 21. Mitä tiedostoja yleensä muokataan?
 
 Kun lisätään uusi hanke:
 
@@ -973,7 +1022,7 @@ Kun parannetaan käyttäjän kysymyksiin vastaamista:
 - rakennetaan hakukerrosta `search/`
 - lisätään eval-kysymyksiä `tests/eval_questions/`
 
-## 20. Mitä ei yleensä muokata käsin?
+## 22. Mitä ei yleensä muokata käsin?
 
 Näitä ei yleensä kannata muokata käsin:
 
@@ -986,7 +1035,7 @@ Näitä ei yleensä kannata muokata käsin:
 
 Canonical JSONia voi tarkistaa käsin, mutta pitkällä aikavälillä tavoitteena on, että se syntyy mahdollisimman paljon parserien ja importerien kautta.
 
-## 21. Nykyiset tunnetut kehityskohdat
+## 23. Nykyiset tunnetut kehityskohdat
 
 ### Operatiivinen importer pitää vakioida
 
@@ -1024,7 +1073,7 @@ Tietokanta tukee jo pgvectoria, mutta varsinainen embedding-generointi ja semant
 
 PDF-putki on selkein. Jos projektien lisäaineistoissa on Word- tai Excel-tiedostoja, niille tarvitaan oma luotettava tekstin- ja taulukonpurku, jotta kokous-, vastaanotto- ja maksutiedot saadaan sisään yhtä hyvin kuin PDF:stä.
 
-## 22. Miten repo toimii käyttäjän kysymyksen kannalta?
+## 24. Miten repo toimii käyttäjän kysymyksen kannalta?
 
 Kun käyttäjä kysyy esimerkiksi:
 
@@ -1057,7 +1106,7 @@ Järjestelmän pitäisi hakea:
 
 Tavoite ei ole antaa pelkkää yleisvastausta, vaan vastata projektikokemuksen perusteella: mitä vastaavassa tilanteessa tehtiin, kuka vastasi, millä perusteella ja miten asia dokumentoitiin.
 
-## 23. Ytimeen tiivistettynä
+## 25. Ytimeen tiivistettynä
 
 Repo rakentaa CIPP-urakoista vertailukelpoisen tietokannan.
 
