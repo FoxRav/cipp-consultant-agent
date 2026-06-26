@@ -280,6 +280,9 @@ def extract_visual_ocr(
     no_pdf: bool,
     timeout: int,
     force: bool,
+    include_pdf: bool,
+    pdf_only: bool,
+    notes_contains: str | None,
 ) -> dict[str, int]:
     counts = {
         "files_seen": 0,
@@ -292,9 +295,24 @@ def extract_visual_ocr(
     with psycopg.connect(db_url, row_factory=dict_row) as conn:
         params: list[Any] = [sorted(DEFAULT_VISUAL_EXTS)]
         where = "WHERE lower(case when file_ext like '.%%' then file_ext else '.' || file_ext end) = ANY(%s)"
+        if pdf_only:
+            params = []
+            where = (
+                "WHERE lower(case when file_ext like '.%%' then file_ext else '.' || file_ext end) = '.pdf' "
+                "AND needs_ocr IS TRUE"
+            )
+        elif include_pdf:
+            where = (
+                "WHERE (lower(case when file_ext like '.%%' then file_ext else '.' || file_ext end) = ANY(%s) "
+                "OR (lower(case when file_ext like '.%%' then file_ext else '.' || file_ext end) = '.pdf' "
+                "AND needs_ocr IS TRUE))"
+            )
         if project_code:
             where += " AND project_code = %s"
             params.append(project_code)
+        if notes_contains:
+            where += " AND notes ILIKE %s"
+            params.append(f"%{notes_contains}%")
         rows = conn.execute(
             f"""
             SELECT id, project_code, original_filename, stored_path, file_ext
@@ -332,6 +350,9 @@ def main() -> None:
     parser.add_argument("--quality", default="max")
     parser.add_argument("--timeout", type=int, default=600)
     parser.add_argument("--write-pdf", action="store_true")
+    parser.add_argument("--include-pdf", action="store_true")
+    parser.add_argument("--pdf-only", action="store_true")
+    parser.add_argument("--notes-contains")
     parser.add_argument("--force", action="store_true")
     parser.add_argument("--db")
     parser.add_argument("--env", type=Path, default=Path(".env"))
@@ -351,6 +372,9 @@ def main() -> None:
         no_pdf=not args.write_pdf,
         timeout=args.timeout,
         force=args.force,
+        include_pdf=args.include_pdf,
+        pdf_only=args.pdf_only,
+        notes_contains=args.notes_contains,
     )
     print(
         "Visual OCR: {completed} completed, {completed_no_text} without text, "

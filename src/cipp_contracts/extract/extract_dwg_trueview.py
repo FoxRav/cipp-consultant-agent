@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import shutil
@@ -11,12 +12,14 @@ from typing import Any
 import psycopg
 from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
+from pypdf import PdfReader
 
 from cipp_contracts.config import database_url
 from cipp_contracts.extract.extract_office_text import stable_hash, text_quality_score
 
 
 EXTRACTOR_NAME = "autodesk_dwg_trueview"
+DERIVED_DOCUMENT_TYPE = "drawing_index"
 
 
 def find_accoreconsole(explicit_path: Path | None = None) -> Path | None:
@@ -105,6 +108,25 @@ def clean_process_text(value: str) -> str:
     return value.replace("\x00", "")
 
 
+def sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for block in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def inspect_pdf(path: Path) -> tuple[int | None, bool | None, bool | None]:
+    try:
+        reader = PdfReader(str(path))
+        page_count = len(reader.pages)
+        sample_text = "\n".join((page.extract_text() or "") for page in reader.pages[: min(3, page_count)])
+        has_text_layer = bool(sample_text.strip())
+        return page_count, has_text_layer, not has_text_layer
+    except Exception:
+        return None, None, None
+
+
 def write_log(
     output_dir: Path,
     source_file: dict[str, Any],
@@ -124,6 +146,63 @@ def write_log(
     }
     log_path = output_dir / f"{Path(source_file['original_filename']).stem}_trueview_run.json"
     log_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+
+def register_derived_pdf(
+    conn: psycopg.Connection[Any],
+    source_file: dict[str, Any],
+    output_pdf: Path,
+) -> Any:
+    page_count, has_text_layer, needs_ocr = inspect_pdf(output_pdf)
+    file_hash = sha256_file(output_pdf)
+    notes = f"Derived PDF converted from DWG source file {source_file['original_filename']} with Autodesk DWG TrueView."
+    derived_id = conn.execute(
+        """
+        INSERT INTO raw.source_files (
+            project_code, original_filename, stored_path, document_type, file_ext,
+            sha256, page_count, byte_size, has_text_layer, needs_ocr, notes
+        )
+        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+        ON CONFLICT (sha256) DO UPDATE
+        SET project_code = EXCLUDED.project_code,
+            original_filename = EXCLUDED.original_filename,
+            stored_path = EXCLUDED.stored_path,
+            document_type = EXCLUDED.document_type,
+            file_ext = EXCLUDED.file_ext,
+            page_count = EXCLUDED.page_count,
+            byte_size = EXCLUDED.byte_size,
+            has_text_layer = EXCLUDED.has_text_layer,
+            needs_ocr = EXCLUDED.needs_ocr,
+            notes = EXCLUDED.notes
+        RETURNING id
+        """,
+        (
+            source_file["project_code"],
+            output_pdf.name,
+            output_pdf.as_posix(),
+            DERIVED_DOCUMENT_TYPE,
+            ".pdf",
+            file_hash,
+            page_count,
+            output_pdf.stat().st_size,
+            has_text_layer,
+            needs_ocr,
+            notes,
+        ),
+    ).fetchone()["id"]
+    conn.execute(
+        """
+        INSERT INTO raw.source_file_document_types (
+            source_file_id, document_type, is_primary, notes
+        )
+        VALUES (%s,%s,%s,%s)
+        ON CONFLICT (source_file_id, document_type) DO UPDATE
+        SET is_primary = EXCLUDED.is_primary,
+            notes = EXCLUDED.notes
+        """,
+        (derived_id, DERIVED_DOCUMENT_TYPE, True, notes),
+    )
+    return derived_id
 
 
 def process_dwg(
@@ -219,9 +298,11 @@ def process_dwg(
         return "failed", 0
 
     if output_pdf.exists():
+        derived_pdf_id = register_derived_pdf(conn, source_file, output_pdf)
         text = (
             f"DWG converted to PDF with Autodesk DWG TrueView.\n"
             f"Source: {dwg_path.name}\nOutput PDF: {output_pdf.as_posix()}"
+            f"\nDerived PDF source_file_id: {derived_pdf_id}"
         )
         conn.execute("DELETE FROM raw.pages WHERE source_file_id = %s", (source_file_id,))
         conn.execute(

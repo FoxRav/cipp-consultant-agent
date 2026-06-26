@@ -470,6 +470,7 @@ Mitä se tekee:
 - käyttää OCR-repositorion valmista rakenne-OCR-putkea, esimerkiksi `structurev3`-moottoria
 - lukee tuotetun markdownin ja tallentaa sen `raw.pages`-tauluun
 - kirjoittaa OCR-ajon lokin `data/extracted/visual_ocr/`-kansioon
+- osaa `--pdf-only`- ja `--notes-contains`-lipuilla rajata OCR:n esimerkiksi vain DWG:stä syntyneisiin OCR-tarpeisiin PDF-välituloksiin
 
 Tämä on silta kuva-/skannausmaailmasta samaan relaatiotietokantaan kuin PDF- ja Office-asiakirjat.
 
@@ -482,6 +483,7 @@ Mitä se tekee:
 - hakee `.dwg`-tiedostot `raw.source_files`-taulusta
 - ajaa `accoreconsole.exe`-ohjelman projektikohtaisella plottausskriptillä
 - tuottaa PDF-välituloksen `data/extracted/dwg_trueview/`-kansioon
+- rekisteröi syntyneen PDF:n johdannaiseksi lähdetiedostoksi `raw.source_files`-tauluun
 - tallentaa `raw.pages`-tauluun jäljitettävän merkinnän siitä, mihin PDF muunnettiin
 - säilyttää TrueViewin stdout/stderr-lokin myöhempää virheiden analyysia varten
 

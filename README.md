@@ -147,6 +147,7 @@ cipp-extract-office-text --project reference_001 --output data\extracted\referen
 cipp-extract-remaining-text --project reference_001 --output data\extracted\remaining_text --soffice-path "C:\Program Files\LibreOffice\program\soffice.exe"
 cipp-extract-visual-ocr --project reference_001 --output data\extracted\visual_ocr --engine structurev3 --quality standard
 cipp-extract-dwg-trueview --project reference_001 --output data\extracted\dwg_trueview --accoreconsole-path "C:\Program Files\Autodesk\DWG TrueView 2027 - English\accoreconsole.exe"
+cipp-extract-visual-ocr --project reference_001 --output data\extracted\visual_ocr_dwg_pdf --engine structurev3 --quality standard --pdf-only --notes-contains "Derived PDF converted from DWG"
 cipp-build-markdown --project reference_001 --output data\extracted\reference_001\markdown
 cipp-link-contract-documents --project reference_001
 cipp-load-markdown-sections --project reference_001 --input data\extracted\reference_001\markdown
