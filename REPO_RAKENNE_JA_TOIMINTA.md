@@ -770,10 +770,14 @@ Mitä se tekee:
 - hakee aiheen mukaiset `kg.entities`-solmut ja 1-hop `kg.relations`-suhteet
 - hakee `kg.evidence`-rivit
 - hakee evidencen perusteella `doc.sections`-, `doc.clauses`- ja `raw.pages`-tekstikatkelmat
+- painottaa JV/SV-, urakkaraja- ja scope-kyselyissä domain-entityjä kuten `sewer_segment`, `scope_item`, `boundary`, `technical_requirement`, `quality_requirement` ja `responsibility`
+- käyttää tekstikontekstin fallback-ketjua: clause -> section -> raw.page -> source_file pages -> entity source -> topic fallback
+- kertoo coverage-tilan kentällä `evidence_coverage_status`: `ok`, `partial`, `weak` tai `no_text_context`
+- merkitsee entity-, relation- ja evidence-riveille `text_context_status`-arvon, kuten `direct_clause`, `direct_section`, `direct_page`, `source_file_page`, `entity_source_fallback`, `topic_text_fallback` tai `missing`
 - anonymisoi referenssien käytön `reference_001`-tyyppisiksi sisäisiksi lähteiksi
 - palauttaa JSON- ja Markdown-muotoisen retrieval-paketin
 
-Tämä on v0.5.0-kehityslinjan ensimmäinen vaihe. Myöhempi hybrid RAG / GraphRAG -vastauslogiikka käyttää tätä pakettia vastauksen aineistona.
+Tämä on v0.5.0-kehityslinjan retrieval-vaihe. Se ei ole vielä agenttivastaus: myöhempi hybrid RAG / GraphRAG -vastauslogiikka käyttää tätä pakettia vastauksen aineistona.
 
 ## 14. Validate: laadunvarmistus
 

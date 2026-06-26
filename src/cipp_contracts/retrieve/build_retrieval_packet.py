@@ -28,6 +28,9 @@ REQUIRED_PACKET_KEYS = (
     "sections",
     "clauses",
     "raw_pages",
+    "evidence_coverage_status",
+    "missing_text_context_count",
+    "text_context_count",
     "reference_usage",
     "warnings",
     "retrieval_status",
@@ -72,19 +75,49 @@ TOPIC_RULES: dict[str, dict[str, Any]] = {
         "relation_types": ("CONTAINS", "SUPPORTED_BY", "RESPONSIBLE_FOR", "RESOLVED_BY"),
     },
     "boundaries": {
-        "keywords": ("urakkaraja", "rajaus", "kuuluuko urakkaan", "urakkaan"),
-        "entity_types": ("boundary", "scope_item", "sewer_segment", "responsibility", "clause"),
+        "keywords": ("urakkaraja", "rajaus", "kuuluuko urakkaan", "ei kuulu urakkaan", "urakkaan"),
+        "entity_types": ("boundary", "scope_item", "contract", "document", "responsibility"),
         "relation_types": ("DEFINES", "AFFECTS", "SUPPORTED_BY", "RESPONSIBLE_FOR"),
     },
     "wastewater_sewer": {
-        "keywords": ("jv", "jätevesi", "pystylinja", "pohjaviemäri", "tonttilinja"),
-        "entity_types": ("sewer_segment", "scope_item", "boundary", "technical_requirement"),
+        "keywords": (
+            "jv",
+            "jätevesi",
+            "jätevesiviemäri",
+            "pystylinja",
+            "viemäripysty",
+            "pohjaviemäri",
+            "tonttiviemäri",
+            "tonttilinja",
+            "asuntohajotus",
+        ),
+        "entity_types": (
+            "sewer_segment",
+            "scope_item",
+            "boundary",
+            "technical_requirement",
+            "quality_requirement",
+            "responsibility",
+        ),
         "relation_types": ("DEFINES", "AFFECTS", "SUPPORTED_BY", "REQUIRES"),
         "missing_fields": ("apartments_count", "jv_verticals_count"),
     },
     "stormwater_sewer": {
-        "keywords": ("sv", "sadevesi", "kattokaivo", "sadevesiviemäri"),
-        "entity_types": ("sewer_segment", "scope_item", "boundary", "technical_requirement"),
+        "keywords": (
+            "sv",
+            "sadevesi",
+            "sadevesiviemäri",
+            "kattokaivo",
+            "pihakaivo",
+            "sadevesilinja",
+        ),
+        "entity_types": (
+            "sewer_segment",
+            "scope_item",
+            "boundary",
+            "technical_requirement",
+            "quality_requirement",
+        ),
         "relation_types": ("DEFINES", "AFFECTS", "SUPPORTED_BY", "REQUIRES"),
         "missing_fields": ("sv_verticals_count",),
     },
@@ -127,6 +160,14 @@ USER_CASE_FIELDS = (
     "includes_yard_line",
     "includes_video_inspection",
 )
+DIRECT_TEXT_CONTEXT_STATUSES = {"direct_clause", "direct_section", "direct_page", "source_file_page", "entity_source_fallback"}
+DOMAIN_SOURCE_TABLES = {
+    "domain.sewer_segments",
+    "domain.scope_items",
+    "domain.contract_boundaries",
+    "domain.technical_requirements",
+    "domain.responsibility_matrix",
+}
 
 
 @dataclass(frozen=True)
@@ -164,8 +205,11 @@ class RetrievalRepository(Protocol):
     def fetch_text_context(
         self,
         evidence_rows: list[dict[str, Any]],
+        entity_rows: list[dict[str, Any]],
+        relation_rows: list[dict[str, Any]],
+        keywords: list[str],
         limit_sections: int,
-    ) -> dict[str, list[dict[str, Any]]]: ...
+    ) -> dict[str, Any]: ...
 
 
 class ReferenceAnonymizer:
@@ -267,9 +311,9 @@ class PostgresRetrievalRepository:
             LEFT JOIN core.projects p ON p.id = r.project_id
             WHERE (%s::text IS NULL OR p.project_code = %s::text)
               AND (r.subject_entity_id = ANY(%s::uuid[]) OR r.object_entity_id = ANY(%s::uuid[]))
-              AND (cardinality(%s::text[]) = 0 OR r.relation_type = ANY(%s))
+              AND (cardinality(%s::text[]) = 0 OR r.relation_type = ANY(%s::text[]))
             ORDER BY
-                CASE WHEN r.relation_type = ANY(%s) THEN 0 ELSE 1 END,
+                CASE WHEN r.relation_type = ANY(%s::text[]) THEN 0 ELSE 1 END,
                 r.relation_type
             LIMIT %s
             """,
@@ -322,17 +366,47 @@ class PostgresRetrievalRepository:
     def fetch_text_context(
         self,
         evidence_rows: list[dict[str, Any]],
+        entity_rows: list[dict[str, Any]],
+        relation_rows: list[dict[str, Any]],
+        keywords: list[str],
         limit_sections: int,
-    ) -> dict[str, list[dict[str, Any]]]:
+    ) -> dict[str, Any]:
         section_ids = _unique_ids(row.get("section_id") for row in evidence_rows)
         clause_ids = _unique_ids(row.get("clause_id") for row in evidence_rows)
         page_ids = _unique_ids(row.get("page_id") for row in evidence_rows)
         source_file_ids = _unique_ids(row.get("source_file_id") for row in evidence_rows)
+        evidence_status = _initial_evidence_status(evidence_rows)
+        clauses = self._fetch_clauses(clause_ids, limit_sections)
+        sections = self._fetch_sections(section_ids, limit_sections)
+        raw_pages = self._fetch_raw_pages(page_ids, limit_sections)
+        source_file_pages = self._fetch_source_file_pages(source_file_ids, keywords, limit_sections)
+        _mark_status_for_matching_ids(evidence_status, evidence_rows, "clause_id", clauses, "direct_clause")
+        _mark_status_for_matching_ids(evidence_status, evidence_rows, "section_id", sections, "direct_section")
+        _mark_status_for_matching_ids(evidence_status, evidence_rows, "page_id", raw_pages, "direct_page")
+        _mark_status_for_matching_ids(evidence_status, evidence_rows, "source_file_id", source_file_pages, "source_file_page", row_id_key="source_file_id")
+
+        topic_sections: list[dict[str, Any]] = []
+        if any(status == "missing" for status in evidence_status.values()):
+            project_codes = _context_project_codes(entity_rows, relation_rows)
+            topic_sections = self._fetch_topic_sections(project_codes, keywords, limit_sections)
+            fallback_status = _fallback_status_for_evidence(evidence_rows)
+            if topic_sections:
+                for row in evidence_rows:
+                    evidence_id = _str(row.get("id")) or ""
+                    if evidence_status.get(evidence_id) == "missing":
+                        evidence_status[evidence_id] = fallback_status.get(evidence_id, "topic_text_fallback")
         return {
-            "sections": self._fetch_sections(section_ids, limit_sections),
-            "clauses": self._fetch_clauses(clause_ids, limit_sections),
-            "raw_pages": self._fetch_raw_pages(page_ids, limit_sections),
+            "sections": [
+                *[_with_status(row, "direct_section") for row in sections],
+                *[_with_status(row, "topic_text_fallback") for row in topic_sections],
+            ][:limit_sections],
+            "clauses": [_with_status(row, "direct_clause") for row in clauses],
+            "raw_pages": [
+                *[_with_status(row, "direct_page") for row in raw_pages],
+                *[_with_status(row, "source_file_page") for row in source_file_pages],
+            ][:limit_sections],
             "source_files": self._fetch_source_files(source_file_ids),
+            "evidence_status": evidence_status,
         }
 
     def _fetch_sections(self, section_ids: list[str], limit: int) -> list[dict[str, Any]]:
@@ -427,6 +501,81 @@ class PostgresRetrievalRepository:
         ).fetchall()
         return [dict(row) for row in rows]
 
+    def _fetch_source_file_pages(
+        self,
+        source_file_ids: list[str],
+        keywords: list[str],
+        limit: int,
+    ) -> list[dict[str, Any]]:
+        if not source_file_ids:
+            return []
+        patterns = [f"%{keyword}%" for keyword in keywords] or ["%"]
+        rows = self.conn.execute(
+            """
+            SELECT
+                rp.id,
+                rp.source_file_id,
+                rp.page_no,
+                rp.raw_text,
+                rp.text_quality_score,
+                sf.document_type,
+                sf.project_code
+            FROM raw.pages rp
+            JOIN raw.source_files sf ON sf.id = rp.source_file_id
+            WHERE rp.source_file_id = ANY(%s::uuid[])
+              AND (rp.raw_text ILIKE ANY(%s::text[]) OR cardinality(%s::text[]) = 0)
+            ORDER BY
+                CASE WHEN rp.raw_text ILIKE ANY(%s::text[]) THEN 0 ELSE 1 END,
+                sf.project_code,
+                rp.page_no
+            LIMIT %s
+            """,
+            (source_file_ids, patterns, patterns, patterns, limit),
+        ).fetchall()
+        return [dict(row) for row in rows]
+
+    def _fetch_topic_sections(
+        self,
+        project_codes: list[str],
+        keywords: list[str],
+        limit: int,
+    ) -> list[dict[str, Any]]:
+        if not project_codes:
+            return []
+        patterns = [f"%{keyword}%" for keyword in keywords] or ["%"]
+        rows = self.conn.execute(
+            """
+            SELECT
+                ds.id,
+                ds.title,
+                ds.section_key,
+                ds.body_text,
+                ds.page_start,
+                ds.page_end,
+                ds.source_confidence,
+                cd.document_type,
+                cd.source_file_id,
+                p.project_code
+            FROM doc.sections ds
+            JOIN core.contract_documents cd ON cd.id = ds.contract_document_id
+            JOIN core.contracts c ON c.id = cd.contract_id
+            JOIN core.projects p ON p.id = c.project_id
+            WHERE p.project_code = ANY(%s::text[])
+              AND (
+                    ds.body_text ILIKE ANY(%s::text[])
+                    OR coalesce(ds.title, '') ILIKE ANY(%s::text[])
+                    OR cd.document_type ILIKE ANY(%s::text[])
+                  )
+            ORDER BY
+                CASE WHEN ds.body_text ILIKE ANY(%s::text[]) THEN 0 ELSE 1 END,
+                p.project_code,
+                ds.section_order
+            LIMIT %s
+            """,
+            (project_codes, patterns, patterns, patterns, patterns, limit),
+        ).fetchall()
+        return [dict(row) for row in rows]
+
 
 class MemoryRetrievalRepository:
     def __init__(
@@ -437,6 +586,8 @@ class MemoryRetrievalRepository:
         sections: list[dict[str, Any]] | None = None,
         clauses: list[dict[str, Any]] | None = None,
         raw_pages: list[dict[str, Any]] | None = None,
+        source_file_pages: list[dict[str, Any]] | None = None,
+        topic_sections: list[dict[str, Any]] | None = None,
     ) -> None:
         self.entities = entities or []
         self.relations = relations or []
@@ -444,6 +595,8 @@ class MemoryRetrievalRepository:
         self.sections = sections or []
         self.clauses = clauses or []
         self.raw_pages = raw_pages or []
+        self.source_file_pages = source_file_pages or []
+        self.topic_sections = topic_sections or []
 
     def search_entities(
         self,
@@ -499,22 +652,56 @@ class MemoryRetrievalRepository:
     def fetch_text_context(
         self,
         evidence_rows: list[dict[str, Any]],
+        entity_rows: list[dict[str, Any]],
+        relation_rows: list[dict[str, Any]],
+        keywords: list[str],
         limit_sections: int,
-    ) -> dict[str, list[dict[str, Any]]]:
+    ) -> dict[str, Any]:
+        del relation_rows
         section_ids = set(_unique_ids(row.get("section_id") for row in evidence_rows))
         clause_ids = set(_unique_ids(row.get("clause_id") for row in evidence_rows))
         page_ids = set(_unique_ids(row.get("page_id") for row in evidence_rows))
+        source_file_ids = set(_unique_ids(row.get("source_file_id") for row in evidence_rows))
+        evidence_status = _initial_evidence_status(evidence_rows)
+        sections = [row for row in self.sections if str(row.get("id")) in section_ids][:limit_sections]
+        clauses = [row for row in self.clauses if str(row.get("id")) in clause_ids][:limit_sections]
+        raw_pages = [row for row in self.raw_pages if str(row.get("id")) in page_ids][:limit_sections]
+        source_file_pages = [
+            row
+            for row in self.source_file_pages
+            if str(row.get("source_file_id")) in source_file_ids
+            and _row_matches_keywords(row, keywords, "raw_text")
+        ][:limit_sections]
+        _mark_status_for_matching_ids(evidence_status, evidence_rows, "clause_id", clauses, "direct_clause")
+        _mark_status_for_matching_ids(evidence_status, evidence_rows, "section_id", sections, "direct_section")
+        _mark_status_for_matching_ids(evidence_status, evidence_rows, "page_id", raw_pages, "direct_page")
+        _mark_status_for_matching_ids(evidence_status, evidence_rows, "source_file_id", source_file_pages, "source_file_page", row_id_key="source_file_id")
+        topic_sections: list[dict[str, Any]] = []
+        if any(status == "missing" for status in evidence_status.values()):
+            project_codes = set(_context_project_codes(entity_rows, []))
+            topic_sections = [
+                row
+                for row in self.topic_sections
+                if row.get("project_code") in project_codes and _row_matches_keywords(row, keywords, "body_text")
+            ][:limit_sections]
+            if topic_sections:
+                fallback_status = _fallback_status_for_evidence(evidence_rows)
+                for row in evidence_rows:
+                    evidence_id = _str(row.get("id")) or ""
+                    if evidence_status.get(evidence_id) == "missing":
+                        evidence_status[evidence_id] = fallback_status.get(evidence_id, "topic_text_fallback")
         return {
-            "sections": [row for row in self.sections if str(row.get("id")) in section_ids][
-                :limit_sections
-            ],
-            "clauses": [row for row in self.clauses if str(row.get("id")) in clause_ids][
-                :limit_sections
-            ],
-            "raw_pages": [row for row in self.raw_pages if str(row.get("id")) in page_ids][
-                :limit_sections
-            ],
+            "sections": [
+                *[_with_status(row, "direct_section") for row in sections],
+                *[_with_status(row, "topic_text_fallback") for row in topic_sections],
+            ][:limit_sections],
+            "clauses": [_with_status(row, "direct_clause") for row in clauses],
+            "raw_pages": [
+                *[_with_status(row, "direct_page") for row in raw_pages],
+                *[_with_status(row, "source_file_page") for row in source_file_pages],
+            ][:limit_sections],
             "source_files": [],
+            "evidence_status": evidence_status,
         }
 
 
@@ -556,7 +743,11 @@ def build_retrieval_packet(
     )
     relation_ids = [str(row["id"]) for row in relations]
     evidence_rows = repository.fetch_evidence(entity_ids, relation_ids, limits.evidence)
-    context = repository.fetch_text_context(evidence_rows, limits.sections)
+    context = repository.fetch_text_context(evidence_rows, entities, relations, keywords, limits.sections)
+    evidence_status = context.get("evidence_status", {})
+    entity_status = text_context_status_by_target(evidence_rows, evidence_status, "entity_id")
+    relation_status = text_context_status_by_target(evidence_rows, evidence_status, "relation_id")
+    coverage = evidence_coverage(evidence_rows, context)
 
     packet = {
         "question": question,
@@ -565,18 +756,30 @@ def build_retrieval_packet(
         "detected_topics": topics,
         "missing_user_case_fields": missing_user_case_fields(user_case, topics),
         "detected_entities": detected_entities,
-        "kg_entities": [_public_entity(row, anonymizer) for row in entities],
-        "kg_relations": [_public_relation(row, anonymizer) for row in relations],
-        "evidence": [_public_evidence(row) for row in evidence_rows],
+        "kg_entities": [
+            _public_entity(row, anonymizer, entity_status.get(_str(row.get("id")) or "", "missing"))
+            for row in entities
+        ],
+        "kg_relations": [
+            _public_relation(row, anonymizer, relation_status.get(_str(row.get("id")) or "", "missing"))
+            for row in relations
+        ],
+        "evidence": [
+            _public_evidence(row, evidence_status.get(_str(row.get("id")) or "", "missing"))
+            for row in evidence_rows
+        ],
         "sections": [_public_section(row, anonymizer) for row in context.get("sections", [])],
         "clauses": [_public_clause(row, anonymizer) for row in context.get("clauses", [])],
         "raw_pages": [_public_raw_page(row, anonymizer) for row in context.get("raw_pages", [])],
+        "evidence_coverage_status": coverage["evidence_coverage_status"],
+        "missing_text_context_count": coverage["missing_text_context_count"],
+        "text_context_count": coverage["text_context_count"],
         "reference_usage": {
             "mode": REFERENCE_MODE,
             "reference_projects_used": anonymizer.labels(),
         },
         "warnings": warnings,
-        "retrieval_status": retrieval_status(entities, evidence_rows, context),
+        "retrieval_status": retrieval_status(entities, coverage),
     }
     return {key: packet[key] for key in REQUIRED_PACKET_KEYS}
 
@@ -677,7 +880,8 @@ def render_markdown(packet: dict[str, Any]) -> str:
     for entity in packet["kg_entities"]:
         lines.append(
             f"- `{_md(entity['entity_type'])}`: {_md(entity['name'])} "
-            f"({_md(entity.get('reference_label') or 'shared')})"
+            f"({_md(entity.get('reference_label') or 'shared')}); "
+            f"text_context={_md(entity.get('text_context_status'))}"
         )
     if not packet["kg_entities"]:
         lines.append("- none")
@@ -686,14 +890,18 @@ def render_markdown(packet: dict[str, Any]) -> str:
         lines.append(
             "- "
             f"{_md(relation['subject']['type'])} -> `{_md(relation['relation_type'])}` -> "
-            f"{_md(relation['object']['type'])} ({_md(relation.get('reference_label') or 'shared')})"
+            f"{_md(relation['object']['type'])} ({_md(relation.get('reference_label') or 'shared')}); "
+            f"text_context={_md(relation.get('text_context_status'))}"
         )
     if not packet["kg_relations"]:
         lines.append("- none")
     lines.extend(["", "## Evidence", ""])
     for evidence in packet["evidence"]:
         label = evidence.get("evidence_note") or evidence.get("source_table") or "evidence"
-        lines.append(f"- {_md(label)}; confidence={_md(evidence.get('confidence'))}")
+        lines.append(
+            f"- {_md(label)}; confidence={_md(evidence.get('confidence'))}; "
+            f"text_context={_md(evidence.get('text_context_status'))}"
+        )
     if not packet["evidence"]:
         lines.append("- none")
     lines.extend(["", "## Source Text Snippets", ""])
@@ -717,6 +925,14 @@ def render_markdown(packet: dict[str, Any]) -> str:
         lines.append("")
     lines.extend(
         [
+            "## Evidence Coverage",
+            "",
+            f"Status: `{packet['evidence_coverage_status']}`",
+            "",
+            f"Text contexts: `{packet['text_context_count']}`",
+            "",
+            f"Missing text contexts: `{packet['missing_text_context_count']}`",
+            "",
             "## Warnings",
             "",
             _list_or_none(packet["warnings"]),
@@ -733,16 +949,10 @@ def render_markdown(packet: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def retrieval_status(
-    entities: list[dict[str, Any]],
-    evidence_rows: list[dict[str, Any]],
-    context: dict[str, list[dict[str, Any]]],
-) -> str:
+def retrieval_status(entities: list[dict[str, Any]], coverage: dict[str, Any]) -> str:
     if not entities:
         return "no_results"
-    if evidence_rows and (
-        context.get("sections") or context.get("clauses") or context.get("raw_pages")
-    ):
+    if coverage["evidence_coverage_status"] == "ok":
         return "ok"
     return "partial"
 
@@ -756,7 +966,7 @@ def write_outputs(packet: dict[str, Any], output: Path | None, output_md: Path |
         output_md.write_text(render_markdown(packet) + "\n", encoding="utf-8")
 
 
-def _public_entity(row: dict[str, Any], anonymizer: ReferenceAnonymizer) -> dict[str, Any]:
+def _public_entity(row: dict[str, Any], anonymizer: ReferenceAnonymizer, text_context_status: str) -> dict[str, Any]:
     return {
         "id": str(row.get("id")),
         "entity_type": row.get("entity_type"),
@@ -766,10 +976,11 @@ def _public_entity(row: dict[str, Any], anonymizer: ReferenceAnonymizer) -> dict
         "document_id": _str(row.get("document_id")),
         "source_table": row.get("source_table"),
         "source_id": _str(row.get("source_id")),
+        "text_context_status": text_context_status,
     }
 
 
-def _public_relation(row: dict[str, Any], anonymizer: ReferenceAnonymizer) -> dict[str, Any]:
+def _public_relation(row: dict[str, Any], anonymizer: ReferenceAnonymizer, text_context_status: str) -> dict[str, Any]:
     return {
         "id": str(row.get("id")),
         "relation_type": row.get("relation_type"),
@@ -785,10 +996,11 @@ def _public_relation(row: dict[str, Any], anonymizer: ReferenceAnonymizer) -> di
             "type": row.get("object_type"),
             "name": sanitize_text(row.get("object_name") or ""),
         },
+        "text_context_status": text_context_status,
     }
 
 
-def _public_evidence(row: dict[str, Any]) -> dict[str, Any]:
+def _public_evidence(row: dict[str, Any], text_context_status: str) -> dict[str, Any]:
     return {
         "id": _str(row.get("id")),
         "entity_id": _str(row.get("entity_id")),
@@ -803,6 +1015,7 @@ def _public_evidence(row: dict[str, Any]) -> dict[str, Any]:
         "quote_text": snippet(row.get("quote_text")),
         "evidence_note": sanitize_text(row.get("evidence_note") or ""),
         "confidence": _jsonable(row.get("confidence")),
+        "text_context_status": text_context_status,
     }
 
 
@@ -818,6 +1031,7 @@ def _public_section(row: dict[str, Any], anonymizer: ReferenceAnonymizer) -> dic
         "page_end": row.get("page_end"),
         "source_confidence": _jsonable(row.get("source_confidence")),
         "snippet": snippet(row.get("body_text")),
+        "text_context_status": row.get("text_context_status"),
     }
 
 
@@ -832,6 +1046,7 @@ def _public_clause(row: dict[str, Any], anonymizer: ReferenceAnonymizer) -> dict
         "title": sanitize_text(row.get("title") or ""),
         "source_page": row.get("source_page"),
         "snippet": snippet(row.get("clause_text")),
+        "text_context_status": row.get("text_context_status"),
     }
 
 
@@ -844,7 +1059,114 @@ def _public_raw_page(row: dict[str, Any], anonymizer: ReferenceAnonymizer) -> di
         "page_no": row.get("page_no"),
         "text_quality_score": _jsonable(row.get("text_quality_score")),
         "snippet": snippet(row.get("raw_text")),
+        "text_context_status": row.get("text_context_status"),
     }
+
+
+def evidence_coverage(evidence_rows: list[dict[str, Any]], context: dict[str, Any]) -> dict[str, Any]:
+    statuses = list(context.get("evidence_status", {}).values())
+    text_context_count = len(context.get("sections", [])) + len(context.get("clauses", [])) + len(context.get("raw_pages", []))
+    missing_count = statuses.count("missing")
+    if not evidence_rows:
+        coverage_status = "no_text_context"
+    elif text_context_count == 0:
+        coverage_status = "no_text_context"
+    elif statuses and all(status == "topic_text_fallback" for status in statuses if status != "missing"):
+        coverage_status = "weak"
+    elif missing_count == 0 and any(status in DIRECT_TEXT_CONTEXT_STATUSES for status in statuses):
+        coverage_status = "ok"
+    elif missing_count < len(evidence_rows):
+        coverage_status = "partial"
+    else:
+        coverage_status = "no_text_context"
+    return {
+        "evidence_coverage_status": coverage_status,
+        "missing_text_context_count": missing_count,
+        "text_context_count": text_context_count,
+    }
+
+
+def text_context_status_by_target(
+    evidence_rows: list[dict[str, Any]],
+    evidence_status: dict[str, str],
+    target_key: str,
+) -> dict[str, str]:
+    result: dict[str, str] = {}
+    for row in evidence_rows:
+        target_id = _str(row.get(target_key))
+        evidence_id = _str(row.get("id"))
+        if not target_id or not evidence_id:
+            continue
+        result[target_id] = _stronger_status(
+            result.get(target_id, "missing"),
+            evidence_status.get(evidence_id, "missing"),
+        )
+    return result
+
+
+def _initial_evidence_status(evidence_rows: list[dict[str, Any]]) -> dict[str, str]:
+    return {_str(row.get("id")) or "": "missing" for row in evidence_rows}
+
+
+def _mark_status_for_matching_ids(
+    evidence_status: dict[str, str],
+    evidence_rows: list[dict[str, Any]],
+    evidence_key: str,
+    context_rows: list[dict[str, Any]],
+    status: str,
+    row_id_key: str = "id",
+) -> None:
+    context_ids = {_str(row.get(row_id_key)) for row in context_rows if row.get(row_id_key) is not None}
+    if not context_ids:
+        return
+    for row in evidence_rows:
+        evidence_id = _str(row.get("id")) or ""
+        if _str(row.get(evidence_key)) in context_ids:
+            evidence_status[evidence_id] = _stronger_status(evidence_status.get(evidence_id, "missing"), status)
+
+
+def _stronger_status(current: str, candidate: str) -> str:
+    order = {
+        "missing": 0,
+        "topic_text_fallback": 1,
+        "entity_source_fallback": 2,
+        "source_file_page": 3,
+        "direct_page": 4,
+        "direct_section": 5,
+        "direct_clause": 6,
+    }
+    return candidate if order.get(candidate, 0) > order.get(current, 0) else current
+
+
+def _with_status(row: dict[str, Any], status: str) -> dict[str, Any]:
+    return {**row, "text_context_status": status}
+
+
+def _fallback_status_for_evidence(evidence_rows: list[dict[str, Any]]) -> dict[str, str]:
+    result: dict[str, str] = {}
+    for row in evidence_rows:
+        evidence_id = _str(row.get("id")) or ""
+        if row.get("source_table") in DOMAIN_SOURCE_TABLES:
+            result[evidence_id] = "entity_source_fallback"
+        else:
+            result[evidence_id] = "topic_text_fallback"
+    return result
+
+
+def _context_project_codes(
+    entity_rows: list[dict[str, Any]],
+    relation_rows: list[dict[str, Any]],
+) -> list[str]:
+    values = [row.get("project_code") for row in entity_rows]
+    values.extend(row.get("project_code") for row in relation_rows)
+    return _unique_ids(values)
+
+
+def _row_matches_keywords(row: dict[str, Any], keywords: list[str], text_key: str) -> bool:
+    if not keywords:
+        return True
+    text = str(row.get(text_key) or "").lower()
+    return any(keyword.lower() in text for keyword in keywords)
 
 
 def snippet(value: Any, max_length: int = 600) -> str:
@@ -867,7 +1189,7 @@ def sanitize_text(value: str) -> str:
     text = re.sub(r"Extractor:\s*`?[^`\s]+`?", "Extractor: [extractor redacted]", text, flags=re.IGNORECASE)
     text = re.sub(r"\+?\d[\d\s().-]{6,}\d", "[phone redacted]", text)
     text = re.sub(
-        r"[^\n]{0,100}\.(?:pdf|docx?|xlsx?|xls|dwg)",
+        r"[^\n]{0,100}\.(?:pdf|docx?|xlsx?|xls|dwg|txt)",
         "[document redacted]",
         text,
         flags=re.IGNORECASE,
@@ -875,6 +1197,37 @@ def sanitize_text(value: str) -> str:
     text = re.sub(
         r"\b(?:As(?:unto)?\.?\s+Oy|AOY)\s+[A-ZÅÄÖ][A-Za-zÅÄÖåäö0-9 .'-]{2,60}",
         "As Oy [redacted]",
+        text,
+    )
+    text = re.sub(
+        r"\b[A-ZÅÄÖ][A-Za-zÅÄÖåäö-]*(?:tie|katu|kuja|polku|kaari|raitti|rinne|väylä|kuja)\s*\d*[A-Za-z]?\b",
+        "[address redacted]",
+        text,
+        flags=re.IGNORECASE,
+    )
+    text = re.sub(
+        r"\b[A-ZÅÄÖ][A-Za-zÅÄÖåäö&.-]*(?:\s+[A-ZÅÄÖ][A-Za-zÅÄÖåäö&.-]*){0,4}\s+(?:Oy|OY|Oyj|RY|ry|Ky|Ab)\b",
+        "[company redacted]",
+        text,
+    )
+    text = re.sub(
+        r"\b[A-ZÅÄÖ0-9&.-]{2,}\s+(?:OY|AB|KY|RY)\b",
+        "[company redacted]",
+        text,
+    )
+    text = re.sub(
+        r"\b[A-ZÅÄÖ][a-zåäö'-]{2,}(?:\s+[A-ZÅÄÖ][a-zåäö'-]{2,}){1,3},\s*(?=[A-ZÅÄÖ]{3,})",
+        "[company redacted], ",
+        text,
+    )
+    text = re.sub(
+        r"\bc/o\s+[A-ZÅÄÖ][A-Za-zÅÄÖåäö'-]+(?:\s+[A-ZÅÄÖ][A-Za-zÅÄÖåäö'-]+){1,2}",
+        "c/o [name redacted]",
+        text,
+    )
+    text = re.sub(
+        r"\b[A-ZÅÄÖ][a-zåäö'-]{2,}\s+[A-ZÅÄÖ][a-zåäö'-]{2,}\b",
+        "[name redacted]",
         text,
     )
     return text

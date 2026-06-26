@@ -192,6 +192,14 @@ Järjestelmä ei ole referenssiprojektien kyselybotti. Käyttäjä kysyy omaa ta
 
 `cipp-build-retrieval-packet` rakentaa vastausaineiston, mutta ei vielä muodosta lopullista agenttivastausta eikä kutsu LLM:ää. Se tunnistaa kysymyksestä aiheen deterministisesti, hakee relevantit `kg.entities`- ja `kg.relations`-rivit, liittää `kg.evidence`-todisteet ja hakee tarvittaessa tekstikatkelmat `doc.sections`-, `doc.clauses`- ja `raw.pages`-kerroksista.
 
+JV/SV-, urakkaraja- ja scope-kyselyissä haku painottaa domain-entityjä: `sewer_segment`, `scope_item`, `boundary`, `technical_requirement`, `quality_requirement` ja `responsibility`. Tekstikontekstin fallback-ketju on:
+
+```text
+clause -> section -> raw.page -> source_file pages -> entity source -> topic fallback
+```
+
+Packet kertoo coverage-tilan kentällä `evidence_coverage_status`: `ok`, `partial`, `weak` tai `no_text_context`. Lisäksi entity-, relation- ja evidence-riveillä on `text_context_status`, esimerkiksi `direct_clause`, `direct_section`, `direct_page`, `source_file_page`, `entity_source_fallback`, `topic_text_fallback` tai `missing`.
+
 ```powershell
 cipp-build-retrieval-packet --question "Mitä maksueristä kannattaa sopia CIPP-sukitusurakassa?" --output data/reports/retrieval_packet.json --output-md data/reports/retrieval_packet.md
 cipp-build-retrieval-packet --question "Mitä pitää huomioida taloyhtiön JV-pystylinjojen ja pohjaviemärin sukituksessa?" --apartments-count 30 --jv-verticals-count 8 --includes-bottom-drain true --output data/reports/retrieval_packet_jv.json --output-md data/reports/retrieval_packet_jv.md
