@@ -32,6 +32,7 @@ cipp-extract-remaining-text = "cipp_contracts.extract.extract_remaining_text:mai
 cipp-import-finlex-legal-xml = "cipp_contracts.extract.import_finlex_legal_xml:main"
 cipp-import-project-operations = "cipp_contracts.extract.import_project_operations:main"
 cipp-inventory-source-files = "cipp_contracts.extract.inventory_source_files:main"
+cipp-report-processing-quality = "cipp_contracts.extract.report_processing_quality:main"
 cipp-link-contract-documents = "cipp_contracts.load.link_contract_documents:main"
 cipp-load-markdown-sections = "cipp_contracts.load.load_markdown_sections:main"
 cipp-validate-canonical = "cipp_contracts.validate.validate_canonical_contract:main"

@@ -72,7 +72,7 @@ Audit-huomio: `raw.extraction_runs` säilyttää myös epäonnistuneet testi- ja
 
 Seuraavat kehitysaskeleet tehdään tässä järjestyksessä:
 
-1. **Käsittelyn laaturaportti.** Rakennetaan komento, joka näyttää projektikohtaisesti tiedostomäärät, tekstisivut, uusimmat onnistuneet purut, epäonnistuneet ajot, OCR-tarpeet ja puuttuvat tekstit.
+1. **Käsittelyn laaturaportti.** Komento `cipp-report-processing-quality` näyttää projektikohtaisesti tiedostomäärät, tekstisivut, uusimmat onnistuneet purut, epäonnistuneet ajot, OCR-tarpeet ja puuttuvat tekstit.
 2. **Markdown- ja section-kerroksen päivitys.** Päivitetään `data/extracted/.../markdown` ja `doc.sections`, jotta OCR- ja DWG-peräiset tekstit tulevat mukaan hakuun.
 3. **Projektifaktojen rikastus.** Poimitaan jokaisesta hankkeesta samat vertailukentät: asuntojen määrä, JV/SV-laajuus, pystylinjat, pohjaviemärit, tonttilinjat, hinnat, lisätyöt, vastaanotto, puutteet, takuu ja videotarkastukset.
 4. **Vertailukelpoisuusmatriisi.** Rakennetaan raportti, jossa jokainen referenssi näkyy samoilla sarakkeilla ja puuttuvat tiedot erottuvat.
@@ -887,6 +887,14 @@ Tuo lakiaineiston Finlex XML -lähteestä.
 
 ```powershell
 cipp-import-finlex-legal-xml --source-dir data/raw/Rakentamisen_Lait
+```
+
+### `cipp-report-processing-quality`
+
+Kirjoittaa käsittelyn laaturaportin. Raportti erottaa viimeisimmän onnistuneen tai epäonnistuneen ajon historiallisista audit-merkinnöistä.
+
+```powershell
+cipp-report-processing-quality --output data/reports/processing_quality_report.md
 ```
 
 ## 17. Tyypillinen uuden projektin käsittely
