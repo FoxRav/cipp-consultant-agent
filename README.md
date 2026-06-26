@@ -217,3 +217,19 @@ cipp-report-retrieval-smoke-matrix --output data/reports/retrieval_smoke_matrix.
 
 Raportti laskee jokaiselle aiheelle `pass`, `partial` tai `fail` -tilan sekä matrix-tason `release_candidate`-arvon. `partial` voi olla hyväksyttävä esimerkiksi vastaanotto-, takuu- tai videotarkastusaiheessa, jos raportti kertoo selkeän syyn eikä anonymisointitarkistus löydä vuotoja. Tämä ei ole agenttivastaus, vaan retrieval-valmiuden testi.
 
+## Source-grounded answer composer
+
+`cipp-compose-answer` on ensimmäinen kontrolloitu vastauskerros retrieval-paketin päälle. Se ei ole täysi agentti, ei kutsu LLM:ää eikä keksi tietoa retrieval-paketin ulkopuolelta. Se valitsee tärkeimmät anonymisoidut lähdekatkelmat, muodostaa lyhyen lähdeperustaisen vastauksen ja näyttää puuttuvat käyttäjätiedot sekä epävarmuudet.
+
+```powershell
+cipp-compose-answer --question "Mitä maksueristä kannattaa sopia CIPP-sukitusurakassa?" --output data/reports/answer_payment.json --output-md data/reports/answer_payment.md
+cipp-compose-answer --retrieval-packet data/reports/retrieval_packet.json --output data/reports/answer.json --output-md data/reports/answer.md
+```
+
+`answer_status` kertoo vastauksen käyttökelpoisuuden:
+
+- `answered`: retrieval ja evidence coverage ovat kunnossa, ja lähdekatkelmia löytyi
+- `partial`: aineistoa löytyi, mutta coverage tai retrieval jäi osittaiseksi
+- `insufficient_evidence`: lähdekatkelmia ei ole riittävästi turvalliseen vastaukseen
+
+Lähteet näytetään `reference_001`-tyyppisinä anonymisoituina viitteinä. Composer käyttää samoja sanitointisääntöjä kuin retrieval-paketti ja redaktoi esimerkiksi raakadatapolkuja, dokumenttinimiä, henkilötietoja ja varomattomia rahamääriä. `llm_used` on tässä vaiheessa aina `false`.

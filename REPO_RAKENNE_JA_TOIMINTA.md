@@ -78,11 +78,12 @@ Seuraavat kehitysaskeleet tehdään tässä järjestyksessä:
 4. **Vertailukelpoisuusmatriisi.** Komento `cipp-report-reference-facts` rakentaa raportin, jossa jokainen referenssi näkyy samoilla sarakkeilla ja puuttuvat tiedot erottuvat.
 5. **PostgreSQL-native knowledge graph.** `cipp-build-knowledge-graph` kokoaa rakenteisista tietokantatauluista todistettavan suhdeverkon `kg`-skeemaan ilman Neo4j:tä tai LLM-arvauksia.
 6. **User-case retrieval packet.** `cipp-build-retrieval-packet` hakee käyttäjän CIPP-kysymykseen liittyvät entityt, suhteet, evidencen ja tekstikatkelmat ilman LLM-agenttia.
-7. **Ensimmäinen kysely-MVP.** Käyttäjä antaa taloyhtiön tiedot, järjestelmä valitsee lähimmän referenssikohteen ja antaa alustavan hinta-/riskikommentin lähdeaineiston perusteella.
+7. **Source-grounded answer composer.** `cipp-compose-answer` muodostaa retrieval-paketista lyhyen, kontrolloidun lähdevastauksen ilman LLM:ää.
+8. **Ensimmäinen kysely-MVP.** Käyttäjä antaa taloyhtiön tiedot, järjestelmä valitsee lähimmän referenssikohteen ja antaa alustavan hinta-/riskikommentin lähdeaineiston perusteella.
 
-Tämän suunnitelman nykyinen konkreettinen toteutettava osa on user-case retrieval packet -kerros.
+Tämän suunnitelman nykyinen konkreettinen toteutettava osa on source-grounded answer composer -kerros.
 
-Tärkeä rajaus: `kg` voidaan rakentaa olemassa olevista rakenteisista riveistä, mutta GraphRAG-/LLM-pohjaista käyttöä ei aloiteta ennen kuin tekstikerroksen ja vertailufaktamatriisin hyväksymisportit ovat kunnossa. Tavoite on välttää tilanne, jossa vastaus näyttäisi täsmälliseltä mutta perustuisi puuttuviin tai heikosti jäljitettäviin faktoihin.
+Tärkeä rajaus: `kg` ja retrieval ovat käytössä vastausaineiston rakentamiseen, mutta vapaata GraphRAG-/LLM-vastausta ei aloiteta vielä. Tavoite on välttää tilanne, jossa vastaus näyttäisi täsmälliseltä mutta perustuisi puuttuviin tai heikosti jäljitettäviin faktoihin.
 
 ## 4. Repojuuren tiedostot
 
@@ -213,6 +214,7 @@ src/cipp_contracts/
   load/        kanonisen mallin lataus PostgreSQL-tietokantaan
   kg/          PostgreSQL-native knowledge graph -rakentaja
   retrieve/    user-case retrieval packet -rakentaja
+  answer/      deterministic source-grounded answer composer
   price/       JV-urakan hinta-arviolaskenta
   validate/    canonical JSON -validointi
   embed/       varattu embedding-/vektorointikerrokselle
@@ -794,7 +796,32 @@ Mitä se tekee:
 
 `partial` voi olla hyväksyttävä esimerkiksi videotarkastus-, vastaanotto- tai takuuaiheessa, jos aihe ei kaadu, evidence löytyy osittain ja raportti kertoo syyn. `fail` estää release candidate -tilan.
 
-## 14. Validate: laadunvarmistus
+## 14. Answer: lähdeperustainen vastausrunko
+
+### `src/cipp_contracts/answer/compose_answer.py`
+
+Muodostaa retrieval-paketista lyhyen, kontrolloidun lähdeperustaisen vastauksen.
+
+Mitä se tekee:
+
+- lukee valmiin retrieval-paketin tai rakentaa sen kysymyksestä
+- valitsee tärkeimmät lähdekatkelmat prioriteetilla: `direct_clause`, `direct_section`, `direct_page`, `source_file_page`, `entity_source_fallback`, `topic_text_fallback`
+- muodostaa JSON- ja Markdown-vastauksen ilman LLM-kutsua
+- käyttää topic-kohtaisia kevyitä runkoja esimerkiksi maksuerille, JV/SV-laajuudelle, urakkarajoille, videotarkastukselle, vastaanotolle, takuulle, vakuuksille, lisätöille ja reklamaatioille
+- näyttää `missing_user_case_fields`-kentän käyttäjälle näkyvinä puuttuvina tietoina
+- näyttää epävarmuudet, jos retrieval tai evidence coverage ei ole täysin kunnossa
+- näyttää lähteet vain anonymisoituina `reference_001`-tyyppisinä viitteinä
+- käyttää retrievalin sanitointisääntöjä ja redaktoi myös varomattomat rahamäärät vastauksista
+
+`answer_status` voi olla:
+
+- `answered`: retrieval ja evidence coverage ovat kunnossa, ja lähdekatkelmia löytyi
+- `partial`: lähteitä löytyi, mutta retrieval tai coverage jäi osittaiseksi
+- `insufficient_evidence`: lähdekatkelmia ei ole riittävästi turvalliseen vastaukseen
+
+Tämä moduuli ei ole täysi agentti. Se ei keskustele, suunnittele uutta tiedonhakua eikä muodosta vapaata LLM-vastausta. `generation_mode` on `deterministic_source_grounded` ja `llm_used` on aina `false`.
+
+## 15. Validate: laadunvarmistus
 
 ### `src/cipp_contracts/validate/validate_canonical_contract.py`
 
@@ -811,7 +838,7 @@ Se tarkistaa esimerkiksi:
 
 Validointi ei ratkaise kaikkea, mutta se estää pahimmat rakenteelliset virheet ennen latausta.
 
-## 15. Price: JV-hinta-arvio
+## 16. Price: JV-hinta-arvio
 
 ### `src/cipp_contracts/price/estimate_jv_price.py`
 
@@ -839,7 +866,7 @@ Lisäksi käytetään kokemusperäistä haarukkaa:
 
 Moduuli voi myös tallentaa arvion `finance.price_estimates`-tauluun.
 
-## 16. Embed ja search
+## 17. Embed ja search
 
 ### `src/cipp_contracts/embed/`
 
@@ -862,7 +889,7 @@ Tuleva rooli:
 - hakea vastaukselle lähdekatkelmat
 - tukea CIPP-kysymys-vastauslogiikkaa
 
-## 17. SQL-kyselyt
+## 18. SQL-kyselyt
 
 ### `db/queries/search_full_text.sql`
 
@@ -926,7 +953,7 @@ Hakee valittujen entityjen ja relaatioiden evidence-rivit.
 
 Auttaa myöhemmin etsimään käyttäjän taloyhtiön tietoihin lähimpiä sisäisiä vertailukohteita.
 
-## 18. Komentorivityökalut
+## 19. Komentorivityökalut
 
 `pyproject.toml` määrittää nämä komennot, kun paketti on asennettu kehitystilaan.
 
@@ -1085,7 +1112,18 @@ cipp-report-retrieval-smoke-matrix --output data/reports/retrieval_smoke_matrix.
 
 Tämä on v0.5.0-ehdokkuuden portti. Raportti ei muodosta agenttivastausta, vaan kertoo ovatko ydinkysymysten retrieval-polut riittävän valmiita.
 
-## 19. Tyypillinen uuden projektin käsittely
+### `cipp-compose-answer`
+
+Muodostaa retrieval-paketista kontrolloidun lähdeperustaisen vastauksen.
+
+```powershell
+cipp-compose-answer --question "Mitä maksueristä kannattaa sopia CIPP-sukitusurakassa?" --output data/reports/answer_payment.json --output-md data/reports/answer_payment.md
+cipp-compose-answer --retrieval-packet data/reports/retrieval_packet.json --output data/reports/answer.json --output-md data/reports/answer.md
+```
+
+Komento voi joko lukea valmiin retrieval-paketin tai rakentaa sen ensin kysymyksestä. Se ei kutsu LLM:ää eikä muodosta väitteitä ilman retrieval-paketin lähdekatkelmia. Outputin `answer_status` on `answered`, `partial` tai `insufficient_evidence`.
+
+## 20. Tyypillinen uuden projektin käsittely
 
 Kun uusi hanke lisätään, tavoite on saada se samaan vertailukelpoiseen muotoon kuin aiemmat hankkeet.
 
@@ -1106,7 +1144,7 @@ Tyypillinen eteneminen:
 
 Tärkeä periaate: kaikissa projekteissa ei ole samaa asiakirjakokonaisuutta, mutta samat olennaiset tiedot pyritään löytämään eri lähteistä. Tarjouspyyntö on yleensä paras lähde teknisille perustiedoille.
 
-## 20. Projektien vertailukelpoisuus
+## 21. Projektien vertailukelpoisuus
 
 Vertailukelpoisuus syntyy kolmesta asiasta:
 
@@ -1122,7 +1160,7 @@ Esimerkki:
 
 Järjestelmän tehtävä on saada nämä eri lähteistä tulevat tiedot samaan rakenteeseen, jotta kysymykset voidaan vastata vertaamalla projekteja eikä vain lukemalla yksittäistä PDF:ää.
 
-## 21. Tärkeimmät CIPP-käsitteet repossa
+## 22. Tärkeimmät CIPP-käsitteet repossa
 
 ### JV-linjat
 
@@ -1165,7 +1203,7 @@ Vastaanotto on hetki, jossa urakoitsija luovuttaa työmaan takaisin taloyhtiön 
 - mitä maksueriä voidaan hyväksyä
 - mitä takuuajan asioita seurataan
 
-## 22. Testit
+## 23. Testit
 
 ### `tests/test_validate_canonical_contract.py`
 
@@ -1194,7 +1232,7 @@ Varmistaa JV-hinta-arvion peruslogiikan:
 
 Sisältää ensimmäiset arviointikysymykset Referenssikohde An aineistolle. Näiden avulla voidaan myöhemmin testata, osaako hakukerros löytää oikean lähdeasiakirjan.
 
-## 23. Mitä tiedostoja yleensä muokataan?
+## 24. Mitä tiedostoja yleensä muokataan?
 
 Kun lisätään uusi hanke:
 
@@ -1218,7 +1256,7 @@ Kun parannetaan käyttäjän kysymyksiin vastaamista:
 - rakennetaan hakukerrosta `search/`
 - lisätään eval-kysymyksiä `tests/eval_questions/`
 
-## 24. Mitä ei yleensä muokata käsin?
+## 25. Mitä ei yleensä muokata käsin?
 
 Näitä ei yleensä kannata muokata käsin:
 
@@ -1231,7 +1269,7 @@ Näitä ei yleensä kannata muokata käsin:
 
 Canonical JSONia voi tarkistaa käsin, mutta pitkällä aikavälillä tavoitteena on, että se syntyy mahdollisimman paljon parserien ja importerien kautta.
 
-## 25. Nykyiset tunnetut kehityskohdat
+## 26. Nykyiset tunnetut kehityskohdat
 
 ### Operatiivinen importer pitää vakioida
 
@@ -1269,7 +1307,7 @@ Tietokanta tukee jo pgvectoria, mutta varsinainen embedding-generointi ja semant
 
 PDF-putki on selkein. Jos projektien lisäaineistoissa on Word- tai Excel-tiedostoja, niille tarvitaan oma luotettava tekstin- ja taulukonpurku, jotta kokous-, vastaanotto- ja maksutiedot saadaan sisään yhtä hyvin kuin PDF:stä.
 
-## 26. Miten repo toimii käyttäjän kysymyksen kannalta?
+## 27. Miten repo toimii käyttäjän kysymyksen kannalta?
 
 Kun käyttäjä kysyy esimerkiksi:
 
@@ -1284,7 +1322,7 @@ Järjestelmän pitäisi edetä näin:
 3. `retrieve` hakee KG:stä aiheen kannalta relevantit entityt ja suhteet.
 4. `kg.evidence` linkittää löydökset `doc.sections`-, `doc.clauses`- ja `raw.pages`-teksteihin.
 5. Retrieval-paketti kertoo mitä tietoja puuttuu tarkempaa arviota varten.
-6. Myöhempi vastausgeneraattori muodostaa varsinaisen vastauksen tästä aineistosta.
+6. `answer` muodostaa lyhyen deterministic source-grounded -vastauksen vain retrieval-paketin aineistosta.
 
 Kun käyttäjä kysyy esimerkiksi:
 
@@ -1302,7 +1340,7 @@ Retrieval-paketin pitäisi hakea:
 
 Tavoite ei ole kysyä yksittäistä referenssiprojektia, vaan käyttää referenssejä sisäisenä, anonymisoituna tietopohjana: mitä vastaavissa tilanteissa on dokumentoitu, kuka vastasi, millä perusteella ja miten asia vietiin evidenceen.
 
-## 27. Ytimeen tiivistettynä
+## 28. Ytimeen tiivistettynä
 
 Repo rakentaa CIPP-urakoista vertailukelpoisen tietokannan.
 
