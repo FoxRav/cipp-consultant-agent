@@ -73,9 +73,31 @@ Python-projektin määritykset:
 - Python-versio vähintään 3.10
 - ajonaikaiset riippuvuudet: `pypdf`, `psycopg[binary]`
 - kehitysriippuvuudet: `pytest`, `ruff`
+- järjestelmäriippuvuudet: Docker Desktop, Docker Compose ja LibreOffice
 - komentorivityökalut määritellään `[project.scripts]`-osiossa
 
 Tämä on tiedosto, joka kertoo Pythonille miten projekti asennetaan kehitystilaan ja mitä komentoja repo tarjoaa.
+
+### Riippuvuudet käytännössä
+
+Python-riippuvuudet löytyvät myös tiedostoista:
+
+- `requirements.txt`: ajonaikaiset kirjastot
+- `requirements-dev.txt`: ajonaikaiset kirjastot sekä testaus- ja lint-työkalut
+
+Järjestelmätason riippuvuudet eivät ole Python-paketteja:
+
+- Docker Desktop ajaa PostgreSQL/pgvector-tietokannan.
+- Docker Compose käynnistää `docker-compose.yml`-palvelut.
+- LibreOffice muuntaa vanhat binääriset Office-tiedostot, erityisesti `.doc` ja `.xls`, moderniin OOXML-muotoon tekstipurkua varten.
+
+Windowsissa oletettu LibreOffice-polku on:
+
+```text
+C:\Program Files\LibreOffice\program\soffice.exe
+```
+
+Jos LibreOffice ei ole PATHissa, komennolle `cipp-extract-remaining-text` annetaan polku parametrilla `--soffice-path`.
 
 ## 3. Kansiorakenne
 

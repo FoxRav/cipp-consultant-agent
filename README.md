@@ -2,10 +2,37 @@
 
 PostgreSQL + pgvector -pohjainen tietokantapohja CIPP-sukitusurakoiden sopimuspakettien inventointiin, normalisointiin, validointiin, hakuun ja myöhempään sopimusluonnosten generointiin.
 
+## Riippuvuudet
+
+Järjestelmätason riippuvuudet:
+
+- Python 3.10+
+- Docker Desktop
+- Docker Compose
+- LibreOffice, suositeltu polku Windowsissa: `C:\Program Files\LibreOffice\program\soffice.exe`
+
+Docker-palvelut:
+
+- PostgreSQL 16
+- pgvector
+
+Python-ajonaikaiset riippuvuudet:
+
+- `pypdf`
+- `psycopg[binary]`
+
+Kehitysriippuvuudet:
+
+- `pytest`
+- `ruff`
+
+LibreOffice tarvitaan vanhojen Office-tiedostojen muuntamiseen, erityisesti `.doc -> .docx` ja `.xls -> .xlsx`. Ilman LibreOfficea modernit `.docx/.xlsx`-tiedostot voidaan silti purkaa, mutta vanhoista binäärisistä Office-tiedostoista saadaan vain rajallinen best-effort-teksti tai jatkokäsittelymerkintä.
+
 ## Käynnistys
 
 ```powershell
 Copy-Item .env.example .env
+python -m pip install -r requirements-dev.txt
 docker compose up -d
 docker compose ps
 ```
@@ -112,6 +139,8 @@ Referenssikohde A (`reference_001`) toimii oletusreferenssinä silloin, kun pare
 ```powershell
 cipp-inventory-source-files --project reference_001 --input data\raw\reference_001\pdf --report data\reports\reference_001\extraction_report.md
 cipp-extract-pdf-pages --project reference_001 --output data\extracted\reference_001\pages_json
+cipp-extract-office-text --project reference_001 --output data\extracted\reference_001\office_text
+cipp-extract-remaining-text --project reference_001 --output data\extracted\remaining_text --soffice-path "C:\Program Files\LibreOffice\program\soffice.exe"
 cipp-build-markdown --project reference_001 --output data\extracted\reference_001\markdown
 cipp-link-contract-documents --project reference_001
 cipp-load-markdown-sections --project reference_001 --input data\extracted\reference_001\markdown
