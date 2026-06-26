@@ -1,0 +1,43 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cipp-contracts"
+version = "0.1.0"
+description = "CIPP-sukitusurakoiden sopimuspakettien PostgreSQL/pgvector-pohja"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "pypdf>=5.0",
+    "psycopg[binary]>=3.2",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.6",
+]
+
+[project.scripts]
+cipp-build-canonical = "cipp_contracts.normalize.build_canonical_contract:main"
+cipp-build-project-canonical = "cipp_contracts.normalize.build_project_canonical:main"
+cipp-enrich-canonical = "cipp_contracts.normalize.enrich_canonical_from_markdown:main"
+cipp-build-markdown = "cipp_contracts.extract.build_markdown:main"
+cipp-extract-pdf-pages = "cipp_contracts.extract.extract_pdf_pages:main"
+cipp-import-finlex-legal-xml = "cipp_contracts.extract.import_finlex_legal_xml:main"
+cipp-inventory-source-files = "cipp_contracts.extract.inventory_source_files:main"
+cipp-link-contract-documents = "cipp_contracts.load.link_contract_documents:main"
+cipp-load-markdown-sections = "cipp_contracts.load.load_markdown_sections:main"
+cipp-validate-canonical = "cipp_contracts.validate.validate_canonical_contract:main"
+cipp-load-contract = "cipp_contracts.load.load_contract_package:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]

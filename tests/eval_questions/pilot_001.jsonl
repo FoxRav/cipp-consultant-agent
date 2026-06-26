@@ -1,0 +1,10 @@
+{"id":"q001","question":"Mikä on urakan kohde?","expected_source":"main_contract"}
+{"id":"q002","question":"Mikä on JV-linjojen urakkaraja ylä- ja alajuoksulla?","expected_source":"main_contract"}
+{"id":"q003","question":"Kuka vastaa telineistä ja kulkuteistä?","expected_source":"main_contract"}
+{"id":"q004","question":"Mitä asiakirjoja sopimukseen kuuluu ja missä järjestyksessä?","expected_source":"main_contract"}
+{"id":"q005","question":"Mitkä asiat ovat lisätyötä viemäreiden huuhtelussa tai rassauksessa?","expected_source":"contract_terms"}
+{"id":"q006","question":"Mitä ISO-standardia sukitustyössä noudatetaan?","expected_source":"contract_terms"}
+{"id":"q007","question":"Miten maksuerät tulevat maksukelpoisiksi?","expected_source":"payment_schedule"}
+{"id":"q008","question":"Mitä yksikköhintoja lisätöille on annettu?","expected_source":"unit_prices"}
+{"id":"q009","question":"Mitä loppudokumentaatioon tulee sisältyä?","expected_source":"quality_manual"}
+{"id":"q010","question":"Mitä vakuuksia urakoitsijalta vaaditaan?","expected_source":"main_contract"}

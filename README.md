@@ -1,0 +1,119 @@
+# CIPP Contract Database
+
+PostgreSQL + pgvector -pohjainen tietokantapohja CIPP-sukitusurakoiden sopimuspakettien inventointiin, normalisointiin, validointiin, hakuun ja myöhempään sopimusluonnosten generointiin.
+
+## Käynnistys
+
+```powershell
+Copy-Item .env.example .env
+docker compose up -d
+docker compose ps
+```
+
+Tietokanta kuuntelee oletuksena osoitteessa:
+
+```text
+postgresql://cipp:<POSTGRES_PASSWORD>@localhost:55432/cipp_contracts
+```
+
+## Rakenne
+
+```text
+db/migrations        PostgreSQL-migraatiot
+db/queries           Manuaaliset tarkistus- ja hakukyselyt
+src/cipp_contracts   Python-työkalut importtiin, validointiin ja hakuun
+data/raw             Alkuperäinen aineisto, ei versionhallintaan
+data/extracted       PDF-purku, taulukot ja canonical JSON
+data/reports         Validointi-, PII- ja ekstraktioraportit
+tests                Testit ja eval-kysymykset
+```
+
+## Ensimmäinen tavoite
+
+1. Aja PostgreSQL + pgvector Dockerilla.
+2. Lataa `db/migrations/001_init.sql`.
+3. Tuo pilottipaketin tiedostot `data/raw/pilot_001/`-kansion alle.
+4. Muodosta canonical JSON.
+5. Validoi canonical JSON ennen tietokantalatausta.
+6. Luo chunkit ja full-text-haku ennen embeddingejä.
+
+YSE 1998 käsitellään omana sopimusasiakirjana dokumenttityypillä `yse_1998`, koska se on pääsopimuksen asiakirjaluettelossa pätevyysjärjestyksen ensimmäinen asiakirja.
+Rakentamisen lakikokonaisuus käsitellään vielä ylempänä normikerroksena dokumenttityypeillä `law_rakentamislaki_751_2023` ja `law_alueidenkayttolaki_132_1999`. Niiden `precedence_rank` on `0`.
+
+## JV/SV segmenttimalli
+
+Vertailua varten viemärijärjestelmät puretaan segmentteihin tauluun `domain.sewer_segments`.
+
+JV-segmentit yläjuoksulta alajuoksulle:
+
+```text
+asuntohajotukset -> pystylinjat -> pohjaviemäri -> tonttilinja
+```
+
+SV-segmentit riippuvat kohteesta:
+
+```text
+pihamaan sadevesikaivot -> SV-tonttilinja
+```
+
+Jos sadevesi kerätään myös katolta, lisätään kalliimpi kattokeräysketju:
+
+```text
+katon kerääjäkaivot -> SV-pystylinjat -> SV-pohjaviemäri
+```
+
+## Videotarkastus ja takuu
+
+Videotarkastus tarkoittaa valmiin sukitetun JV- tai SV-linjan laadunvarmistusketjua:
+
+1. urakoitsija kuvaa valmiin sukitetun linjan
+2. hankkeen valvoja tarkastaa videokuvaukset
+3. valvoja antaa omissa asiakirjoissaan kommentit työn laadusta, puutteista, hyväksynnästä, urakoitsijan vastineista ja mahdollisista seurantakohdista
+4. videotarkastusasiakirjoja käytetään 2-vuotistakuuajan tarkastuksessa
+5. takuutarkastuksessa kerätään tieto viemärien käytössä takuuajan aikana esiintyneistä ongelmista
+6. takuutarkastuksessa päätetään, tarvitseeko työtä korjata takuuvelvoitteena
+
+Tietomallissa `video_inspection_report` ei ole pelkkä videoaineisto, vaan valvojan laadunvarmistus- ja takuuseuranta-asiakirja. Sen havainnot tulee tulkita ketjuna:
+
+```text
+valmis JV/SV-linja -> urakoitsijan kuvaus -> valvojan kommentti -> hyväksyntä / korjaus / takuuajan seuranta -> 2-vuotistakuutarkastus
+```
+
+Vertailuraportti syntyy kyselystä [compare_sewer_segments.sql](F:/-DEV-/97.cipp-contract-db/db/queries/compare_sewer_segments.sql), ja viimeisin CSV on [sewer_segments_comparison.csv](F:/-DEV-/97.cipp-contract-db/data/reports/sewer_segments_comparison.csv).
+
+## JV-hinnan nyrkkisääntö
+
+Kun käyttäjä kysyy oman taloyhtiön kerrostalon kokonaisesta JV-sukitusurakasta, oletussääntö on:
+
+- parhailla materiaaleilla kokonaisurakka on yleensä 5000-8000 euroa/asunto
+- mitä pienempi asuntomäärä, sitä lähempänä hinta on 8000 euroa/asunto
+- asuntojen määrä selittää oletuksena 70 % hinnasta
+- pystylinjojen määrä selittää 10 % hinnasta
+- pohjaviemärin koko ja pituus selittää 10 % hinnasta
+- tonttiviemärin koko ja pituus selittää 10 % hinnasta
+
+Vastausperiaate käyttäjän taloyhtiön hintakysymyksiin:
+
+1. hae kaikki omat vertailukelpoiset referenssiprojektit PostgreSQL:stä
+2. pisteytä ne käyttäjän antamiin tietoihin nähden: asunnot 70 %, pystylinjat 10 %, pohjaviemäri 10 %, tonttiviemäri 10 %
+3. valitse lähin oma referenssikohde
+4. laske hinta-arvio valitun referenssin ja nyrkkisäännön pohjalta
+5. tallenna annettu arvio `finance.price_estimates`-tauluun, jos ajo tehdään `--save`-lipulla
+
+As Oy Kilpikoivu (`pilot_001`) toimii oletusreferenssinä silloin, kun parempaa vertailukelpoista omaa referenssikohdetta ei vielä löydy. Laskuria voi ajaa moduulina:
+
+```powershell
+.\.venv\Scripts\python -m cipp_contracts.price.estimate_jv_price --apartments 49
+.\.venv\Scripts\python -m cipp_contracts.price.estimate_jv_price --apartments 49 --vertical-stacks 15 --save --customer-label "oma_taloyhtio"
+```
+
+## Pilottipaketin raw-vaihe
+
+```powershell
+cipp-inventory-source-files --project pilot_001 --input data\raw\pilot_001\pdf --report data\reports\pilot_001\extraction_report.md
+cipp-extract-pdf-pages --project pilot_001 --output data\extracted\pilot_001\pages_json
+cipp-build-markdown --project pilot_001 --output data\extracted\pilot_001\markdown
+cipp-link-contract-documents --project pilot_001
+cipp-load-markdown-sections --project pilot_001 --input data\extracted\pilot_001\markdown
+```
+
