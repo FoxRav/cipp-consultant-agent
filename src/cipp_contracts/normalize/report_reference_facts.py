@@ -46,9 +46,37 @@ FACT_FIELDS = [
     "warranty_notes_available",
     "missing_fields",
     "weak_evidence_fields",
+    "blocking_missing_fields",
+    "blocking_weak_evidence_fields",
+    "kg_readiness_reasons",
     "confidence_summary",
     "kg_readiness_status",
 ]
+
+KG_BLOCKING_MISSING_FIELDS = {
+    "apartments_count",
+    "jv_verticals_count",
+    "jv_scope_summary",
+    "bottom_drain_scope",
+    "yard_line_scope",
+    "contract_price",
+    "payment_schedule_total",
+    "quality_requirements_available",
+    "video_inspection_available",
+    "handover_or_reception_available",
+    "warranty_notes_available",
+}
+
+KG_BLOCKING_WEAK_FIELDS = {
+    "contract_price",
+    "payment_schedule_total",
+    "payment_schedule_matches_contract_price",
+    "apartments_count",
+    "jv_verticals_count",
+    "jv_scope_summary",
+    "bottom_drain_scope",
+    "yard_line_scope",
+}
 
 
 @dataclass
@@ -128,22 +156,43 @@ def sum_payment_schedule_amounts(items: list[dict[str, Any]]) -> Decimal | None:
 
 def determine_kg_readiness(
     text_layer_status: str,
-    missing_fields: list[str],
-    weak_evidence_fields: list[str],
+    blocking_missing_fields: list[str],
+    blocking_weak_evidence_fields: list[str],
     payment_schedule_matches_contract_price: bool | None,
 ) -> str:
     if text_layer_status == "fail":
         return "not_ready"
     critical = {"apartments_count", "contract_price"}
-    if critical.issubset(set(missing_fields)):
+    if critical.issubset(set(blocking_missing_fields)):
         return "not_ready"
     if payment_schedule_matches_contract_price is False:
         return "needs_review"
-    if weak_evidence_fields or missing_fields:
-        return "needs_review"
-    if text_layer_status == "warning":
+    if blocking_missing_fields or blocking_weak_evidence_fields:
         return "needs_review"
     return "ready"
+
+
+def readiness_reasons(
+    text_layer_status: str,
+    blocking_missing_fields: list[str],
+    blocking_weak_evidence_fields: list[str],
+    payment_schedule_matches_contract_price: bool | None,
+    kg_readiness_status: str,
+) -> list[str]:
+    reasons: list[str] = []
+    if text_layer_status == "fail":
+        reasons.append("text_layer_status is fail")
+    elif text_layer_status == "warning":
+        reasons.append("text layer has warnings but not blocking failures")
+    if blocking_missing_fields:
+        reasons.append("blocking missing fields: " + ", ".join(blocking_missing_fields))
+    if blocking_weak_evidence_fields:
+        reasons.append("blocking weak evidence fields: " + ", ".join(blocking_weak_evidence_fields))
+    if payment_schedule_matches_contract_price is False:
+        reasons.append("payment schedule total does not match contract price")
+    if not reasons and kg_readiness_status == "ready":
+        reasons.append("all blocking facts have acceptable evidence")
+    return reasons
 
 
 def confidence_summary(missing_fields: list[str], weak_evidence_fields: list[str]) -> str:
@@ -222,6 +271,41 @@ def _text_evidence(
         clause_id=row["clause_id"],
         document_type=row["document_type"],
         source_file_id=row["source_file_id"],
+    )
+
+
+def _document_type_evidence(
+    conn: psycopg.Connection[Any],
+    project_code: str,
+    document_types: list[str],
+    field_name: str,
+) -> tuple[bool, dict[str, Any] | None]:
+    row = _fetch_one(
+        conn,
+        """
+        SELECT cd.id AS contract_document_id, cd.source_file_id, cd.document_type
+        FROM core.contract_documents cd
+        JOIN core.contracts c ON c.id = cd.contract_id
+        JOIN core.projects p ON p.id = c.project_id
+        WHERE p.project_code = %s
+          AND cd.document_type = ANY(%s)
+        ORDER BY cd.document_type
+        LIMIT 1
+        """,
+        (project_code, document_types),
+    )
+    if not row:
+        return False, None
+    return True, evidence(
+        field_name,
+        True,
+        "core.contract_documents",
+        "document_type",
+        "medium_high",
+        "Relevant document type is linked to the project.",
+        source_file_id=row["source_file_id"],
+        document_type=row["document_type"],
+        contract_document_id=row["contract_document_id"],
     )
 
 
@@ -307,20 +391,39 @@ def build_project_facts(
             )
 
     _add_scope(conn, contract_id, facts)
-    _add_finance(conn, contract_id, facts)
+    _add_finance(conn, contract_id, project_code, facts)
     _add_availability_flags(conn, contract_id, project_code, facts)
 
+    blocking_missing = [
+        field_name for field_name in facts.missing_fields if field_name in KG_BLOCKING_MISSING_FIELDS
+    ]
+    blocking_weak = [
+        field_name
+        for field_name in facts.weak_evidence_fields
+        if field_name in KG_BLOCKING_WEAK_FIELDS
+    ]
+    kg_readiness_status = determine_kg_readiness(
+        text_layer_status,
+        blocking_missing,
+        blocking_weak,
+        facts.values.get("payment_schedule_matches_contract_price"),
+    )
+    reasons = readiness_reasons(
+        text_layer_status,
+        blocking_missing,
+        blocking_weak,
+        facts.values.get("payment_schedule_matches_contract_price"),
+        kg_readiness_status,
+    )
     facts.values["missing_fields"] = ", ".join(facts.missing_fields)
     facts.values["weak_evidence_fields"] = ", ".join(facts.weak_evidence_fields)
+    facts.values["blocking_missing_fields"] = ", ".join(blocking_missing)
+    facts.values["blocking_weak_evidence_fields"] = ", ".join(blocking_weak)
+    facts.values["kg_readiness_reasons"] = "; ".join(reasons)
     facts.values["confidence_summary"] = confidence_summary(
         facts.missing_fields, facts.weak_evidence_fields
     )
-    facts.values["kg_readiness_status"] = determine_kg_readiness(
-        text_layer_status,
-        facts.missing_fields,
-        facts.weak_evidence_fields,
-        facts.values.get("payment_schedule_matches_contract_price"),
-    )
+    facts.values["kg_readiness_status"] = kg_readiness_status
     return facts
 
 
@@ -390,7 +493,12 @@ def _add_scope(
             facts.missing_fields.append(field_name)
 
 
-def _add_finance(conn: psycopg.Connection[Any], contract_id: Any, facts: ReferenceFacts) -> None:
+def _add_finance(
+    conn: psycopg.Connection[Any],
+    contract_id: Any,
+    project_code: str,
+    facts: ReferenceFacts,
+) -> None:
     price_row = None
     if contract_id:
         price_row = _fetch_one(
@@ -490,7 +598,18 @@ def _add_finance(conn: psycopg.Connection[Any], contract_id: Any, facts: Referen
                 evidence(field_name, value, table_name, "count", "high", f"{count} rows found.")
             )
         else:
-            facts.missing_fields.append(field_name)
+            document_types = {
+                "unit_prices_available": ["unit_prices"],
+                "securities_available": ["security_document", "warranty_security"],
+                "insurance_available": ["contract_terms", "quality_manual", "quality_plan"],
+            }[field_name]
+            found, ev = _document_type_evidence(conn, project_code, document_types, field_name)
+            facts.values[field_name] = found
+            if ev:
+                facts.evidence.append(ev)
+                facts.weak_evidence_fields.append(field_name)
+            else:
+                facts.missing_fields.append(field_name)
 
 
 def _add_availability_flags(
@@ -530,11 +649,18 @@ def _add_availability_flags(
         ("video_inspection_available", ["videotarkastus", "videon", "kuvaus"]),
         ("warranty_notes_available", ["takuu", "takuuajan"]),
     ):
-        found, ev = _text_evidence(conn, project_code, patterns, field_name)
+        doc_types = {
+            "video_inspection_available": ["video_inspection_report"],
+            "warranty_notes_available": ["warranty_security", "security_document", "handover_minutes"],
+        }[field_name]
+        found, ev = _document_type_evidence(conn, project_code, doc_types, field_name)
+        if not found:
+            found, ev = _text_evidence(conn, project_code, patterns, field_name)
         facts.values[field_name] = found
         if ev:
             facts.evidence.append(ev)
-            facts.weak_evidence_fields.append(field_name)
+            if ev["confidence"] == "medium":
+                facts.weak_evidence_fields.append(field_name)
         else:
             facts.missing_fields.append(field_name)
 
@@ -557,11 +683,24 @@ def _add_availability_flags(
             )
         )
     else:
-        found, ev = _text_evidence(conn, project_code, ["vastaanotto", "luovutus"], "handover_or_reception_available")
+        found, ev = _document_type_evidence(
+            conn,
+            project_code,
+            ["handover_minutes", "financial_final_report"],
+            "handover_or_reception_available",
+        )
+        if not found:
+            found, ev = _text_evidence(
+                conn,
+                project_code,
+                ["vastaanotto", "luovutus"],
+                "handover_or_reception_available",
+            )
         facts.values["handover_or_reception_available"] = found
         if ev:
             facts.evidence.append(ev)
-            facts.weak_evidence_fields.append("handover_or_reception_available")
+            if ev["confidence"] == "medium":
+                facts.weak_evidence_fields.append("handover_or_reception_available")
         else:
             facts.missing_fields.append("handover_or_reception_available")
 

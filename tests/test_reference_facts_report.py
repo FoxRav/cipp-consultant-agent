@@ -7,6 +7,7 @@ from cipp_contracts.normalize.report_reference_facts import (
     calculate_price_per_apartment,
     determine_kg_readiness,
     payment_matches,
+    readiness_reasons,
     render_markdown,
     sum_payment_schedule_amounts,
 )
@@ -36,9 +37,19 @@ def test_payment_schedule_total_is_calculated_from_gross_or_net() -> None:
 def test_kg_readiness_ready_needs_review_and_not_ready() -> None:
     assert determine_kg_readiness("ok", [], [], True) == "ready"
     assert determine_kg_readiness("ok", ["payment_schedule_total"], [], None) == "needs_review"
-    assert determine_kg_readiness("warning", [], [], True) == "needs_review"
+    assert determine_kg_readiness("warning", [], [], True) == "ready"
     assert determine_kg_readiness("fail", [], [], True) == "not_ready"
     assert determine_kg_readiness("ok", ["apartments_count", "contract_price"], [], None) == "not_ready"
+    assert determine_kg_readiness("ok", [], ["contract_price"], True) == "needs_review"
+
+
+def test_kg_readiness_reasons_explain_ready_and_review() -> None:
+    ready = readiness_reasons("ok", [], [], True, "ready")
+    review = readiness_reasons("ok", ["contract_price"], ["jv_scope_summary"], True, "needs_review")
+
+    assert ready == ["all blocking facts have acceptable evidence"]
+    assert "blocking missing fields: contract_price" in review
+    assert "blocking weak evidence fields: jv_scope_summary" in review
 
 
 def test_render_markdown_contains_fixture_project_and_evidence() -> None:
@@ -55,6 +66,9 @@ def test_render_markdown_contains_fixture_project_and_evidence() -> None:
             "price_per_apartment": "10000.00",
             "missing_fields": "",
             "weak_evidence_fields": "",
+            "blocking_missing_fields": "",
+            "blocking_weak_evidence_fields": "",
+            "kg_readiness_reasons": "all blocking facts have acceptable evidence",
             "confidence_summary": "strong",
             "kg_readiness_status": "ready",
         },

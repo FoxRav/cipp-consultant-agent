@@ -164,4 +164,6 @@ Knowledge graph -kerrosta ei rakenneta ennen kuin kaksi porttia on kunnossa:
 
 `kg_readiness_status` voi olla `ready`, `needs_review` tai `not_ready`. Se kertoo, voidaanko projektin faktat viedä myöhemmin graafikerrokseen ilman että puuttuvat tiedot, heikko evidence tai tekstikerroksen virheet piiloutuvat.
 
+`needs_review` muuttuu `ready`-tilaksi vasta, kun blokkaavat faktat löytyvät ja niillä on riittävä evidence. Blokkaavia kenttiä ovat erityisesti asuntojen määrä, JV-pystylinjat, JV-laajuus, pohja-/tonttiviemärin rajaus, sopimushinta, maksueräsumma sekä laatu-, videotarkastus-, vastaanotto- ja takuutieto. Ei-blokkaavat puutteet, kuten kerrosala tai liiketilojen määrä, voivat jäädä näkyviin `missing_fields`-kenttään ilman että ne yksin estävät KG-valmiutta.
+
 

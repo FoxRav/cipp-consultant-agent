@@ -933,6 +933,10 @@ Raportin `kg_readiness_status` tarkoittaa:
 - `needs_review`: osa tiedoista puuttuu, evidence on heikkoa tai hinta-/maksuerävertailu vaatii tarkistusta.
 - `not_ready`: tekstikerros tai keskeinen faktapohja puuttuu niin, ettei graafikerrosta saa vielä aloittaa.
 
+`needs_review` muuttuu `ready`-tilaksi, kun `blocking_missing_fields` ja `blocking_weak_evidence_fields` tyhjenevät. Blokkaavia kenttiä ovat esimerkiksi `apartments_count`, `jv_verticals_count`, `jv_scope_summary`, `bottom_drain_scope`, `yard_line_scope`, `contract_price`, `payment_schedule_total`, `quality_requirements_available`, `video_inspection_available`, `handover_or_reception_available` ja `warranty_notes_available`. Raportti näyttää myös `kg_readiness_reasons`-kentässä, miksi projekti on `ready`, `needs_review` tai `not_ready`.
+
+Knowledge graphia ei aloiteta ennen tätä porttia, koska muuten graafi voisi näyttää valmiilta mutta sisältää puuttuvia tai heikosti todistettuja urakkafaktoja.
+
 ## 17. Tyypillinen uuden projektin käsittely
 
 Kun uusi hanke lisätään, tavoite on saada se samaan vertailukelpoiseen muotoon kuin aiemmat hankkeet.
