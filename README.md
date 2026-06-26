@@ -10,6 +10,8 @@ Järjestelmätason riippuvuudet:
 - Docker Desktop
 - Docker Compose
 - LibreOffice, suositeltu polku Windowsissa: `C:\Program Files\LibreOffice\program\soffice.exe`
+- Autodesk DWG TrueView 2027, suositeltu Core Console -polku Windowsissa: `C:\Program Files\Autodesk\DWG TrueView 2027 - English\accoreconsole.exe`
+- paikallinen visuaalisen OCR:n pipeline `kuvien-parsinta`, suositeltu polku: `F:\-DEV-\95.Kuvien-parsinta-SOTA\.venv\Scripts\kuvien-parsinta.exe`
 
 Docker-palvelut:
 
@@ -27,6 +29,8 @@ Kehitysriippuvuudet:
 - `ruff`
 
 LibreOffice tarvitaan vanhojen Office-tiedostojen muuntamiseen, erityisesti `.doc -> .docx` ja `.xls -> .xlsx`. Ilman LibreOfficea modernit `.docx/.xlsx`-tiedostot voidaan silti purkaa, mutta vanhoista binäärisistä Office-tiedostoista saadaan vain rajallinen best-effort-teksti tai jatkokäsittelymerkintä.
+
+Autodesk DWG TrueView tarvitaan DWG-piirustusten erämuuntoon PDF-muotoon ennen jatkokäsittelyä. Visuaalinen OCR käyttää erillisen OCR-repositorion valmista `kuvien-parsinta`-CLI:tä, joka ajaa kuvien ja skannattujen dokumenttien rakenne-OCR:n ja tallentaa tekstin tämän repon `raw.pages`-tauluun.
 
 ## Käynnistys
 
@@ -141,6 +145,8 @@ cipp-inventory-source-files --project reference_001 --input data\raw\reference_0
 cipp-extract-pdf-pages --project reference_001 --output data\extracted\reference_001\pages_json
 cipp-extract-office-text --project reference_001 --output data\extracted\reference_001\office_text
 cipp-extract-remaining-text --project reference_001 --output data\extracted\remaining_text --soffice-path "C:\Program Files\LibreOffice\program\soffice.exe"
+cipp-extract-visual-ocr --project reference_001 --output data\extracted\visual_ocr --engine structurev3 --quality standard
+cipp-extract-dwg-trueview --project reference_001 --output data\extracted\dwg_trueview --accoreconsole-path "C:\Program Files\Autodesk\DWG TrueView 2027 - English\accoreconsole.exe"
 cipp-build-markdown --project reference_001 --output data\extracted\reference_001\markdown
 cipp-link-contract-documents --project reference_001
 cipp-load-markdown-sections --project reference_001 --input data\extracted\reference_001\markdown

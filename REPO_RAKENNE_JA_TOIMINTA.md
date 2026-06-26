@@ -73,7 +73,7 @@ Python-projektin määritykset:
 - Python-versio vähintään 3.10
 - ajonaikaiset riippuvuudet: `pypdf`, `psycopg[binary]`
 - kehitysriippuvuudet: `pytest`, `ruff`
-- järjestelmäriippuvuudet: Docker Desktop, Docker Compose ja LibreOffice
+- järjestelmäriippuvuudet: Docker Desktop, Docker Compose, LibreOffice, Autodesk DWG TrueView 2027 ja paikallinen `kuvien-parsinta` OCR-pipeline
 - komentorivityökalut määritellään `[project.scripts]`-osiossa
 
 Tämä on tiedosto, joka kertoo Pythonille miten projekti asennetaan kehitystilaan ja mitä komentoja repo tarjoaa.
@@ -90,6 +90,8 @@ Järjestelmätason riippuvuudet eivät ole Python-paketteja:
 - Docker Desktop ajaa PostgreSQL/pgvector-tietokannan.
 - Docker Compose käynnistää `docker-compose.yml`-palvelut.
 - LibreOffice muuntaa vanhat binääriset Office-tiedostot, erityisesti `.doc` ja `.xls`, moderniin OOXML-muotoon tekstipurkua varten.
+- Autodesk DWG TrueView 2027 muuntaa DWG-piirustukset PDF-muotoon Core Consolen kautta.
+- `kuvien-parsinta` ajaa visuaalisen OCR:n kuville ja skannatuille piirustuksille erillisen OCR-repositorion valmiilla PaddleOCR-VL/PP-StructureV3-putkella.
 
 Windowsissa oletettu LibreOffice-polku on:
 
@@ -98,6 +100,22 @@ C:\Program Files\LibreOffice\program\soffice.exe
 ```
 
 Jos LibreOffice ei ole PATHissa, komennolle `cipp-extract-remaining-text` annetaan polku parametrilla `--soffice-path`.
+
+Windowsissa oletettu Autodesk Core Console -polku on:
+
+```text
+C:\Program Files\Autodesk\DWG TrueView 2027 - English\accoreconsole.exe
+```
+
+Jos TrueView ei ole PATHissa, komennolle `cipp-extract-dwg-trueview` annetaan polku parametrilla `--accoreconsole-path`.
+
+Visuaalinen OCR käyttää ensisijaisesti tätä paikallista komentoa:
+
+```text
+F:\-DEV-\95.Kuvien-parsinta-SOTA\.venv\Scripts\kuvien-parsinta.exe
+```
+
+Tähän repoon ei kopioida raskaita OCR-mallipainoja tai vanhan OCR-repon ympäristöä. Sen sijaan tähän repoon on lisätty adapteri, joka käyttää valmista pipelinea ja tallentaa tuloksen tämän projektin tietokantamalliin.
 
 ## 3. Kansiorakenne
 
@@ -414,6 +432,60 @@ Mitä se tekee:
 - kirjoittaa sivukohtaisia JSON-tiedostoja `data/extracted/.../pages/`-kansioon
 
 Tämä säilyttää sivutason lähdeviittauksen. Se on tärkeää myöhempää todistettavuutta varten.
+
+### `src/cipp_contracts/extract/extract_office_text.py`
+
+Purkaa modernien Office-tiedostojen tekstisisällön.
+
+Mitä se tekee:
+
+- lukee `.docx`- ja `.xlsx`-tiedostoja `raw.source_files`-taulusta
+- purkaa kappaletekstit, taulukkotekstit ja taulukkolaskennan solut
+- kirjoittaa tekstin `raw.pages`-tauluun
+- tuottaa ajolokin `raw.extraction_runs`-tauluun
+
+Tämä on tärkeä erityisesti työmaapöytäkirjoille, lisätyöasiakirjoille ja taulukoille.
+
+### `src/cipp_contracts/extract/extract_remaining_text.py`
+
+Käsittelee ne tiedostot, joita PDF- ja Office-peruspurku eivät kata.
+
+Mitä se tekee:
+
+- käyttää LibreOfficea vanhojen `.doc`- ja `.xls`-tiedostojen muuntamiseen
+- lukee tekstipohjaiset tiedostot kuten `.txt`, `.xml`, `.odt` ja `.gdoc`
+- kirjaa kuvat, DWG:t ja muut erikoistiedostot seurantamerkinnöiksi
+- tallentaa onnistuneet tekstipurkutulokset `raw.pages`-tauluun
+
+Tämä pitää inventaarion eheänä: tiedetään mitä on käsitelty, mitä voidaan lukea suoraan ja mikä tarvitsee erikoisputken.
+
+### `src/cipp_contracts/extract/extract_visual_ocr.py`
+
+Ajaa visuaalisen OCR:n kuville ja skannatuille dokumenteille.
+
+Mitä se tekee:
+
+- hakee `.jpg`, `.jpeg` ja `.png`-tiedostot `raw.source_files`-taulusta
+- kutsuu ulkoista `kuvien-parsinta parse` -komentoa
+- käyttää OCR-repositorion valmista rakenne-OCR-putkea, esimerkiksi `structurev3`-moottoria
+- lukee tuotetun markdownin ja tallentaa sen `raw.pages`-tauluun
+- kirjoittaa OCR-ajon lokin `data/extracted/visual_ocr/`-kansioon
+
+Tämä on silta kuva-/skannausmaailmasta samaan relaatiotietokantaan kuin PDF- ja Office-asiakirjat.
+
+### `src/cipp_contracts/extract/extract_dwg_trueview.py`
+
+Muuntaa DWG-piirustukset PDF-muotoon Autodesk DWG TrueView 2027:n avulla.
+
+Mitä se tekee:
+
+- hakee `.dwg`-tiedostot `raw.source_files`-taulusta
+- ajaa `accoreconsole.exe`-ohjelman projektikohtaisella plottausskriptillä
+- tuottaa PDF-välituloksen `data/extracted/dwg_trueview/`-kansioon
+- tallentaa `raw.pages`-tauluun jäljitettävän merkinnän siitä, mihin PDF muunnettiin
+- säilyttää TrueViewin stdout/stderr-lokin myöhempää virheiden analyysia varten
+
+DWG-adapteri ei vielä tulkitse piirustusten sisältöä itse. Sen tehtävä on ensin saada DWG:t luettavaan PDF-välimuotoon, jonka jälkeen PDF- ja OCR-putket voivat käsitellä niitä samalla periaatteella kuin muut lähteet.
 
 ### `src/cipp_contracts/extract/build_markdown.py`
 

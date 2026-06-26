@@ -4,10 +4,12 @@
 .venv/
 __pycache__/
 *.py[cod]
+*.log
 .pytest_cache/
 .ruff_cache/
 .mypy_cache/
 *.egg-info/
+ErrorReports/
 
 # Local notes and terminal scratch files
 ignore-*.md
