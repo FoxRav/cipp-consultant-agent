@@ -35,6 +35,10 @@ FACT_FIELDS = [
     "contract_price",
     "payment_schedule_total",
     "payment_schedule_matches_contract_price",
+    "payment_schedule_difference",
+    "payment_schedule_difference_pct",
+    "payment_schedule_evidence_status",
+    "payment_schedule_readiness_reason",
     "price_per_apartment",
     "unit_prices_available",
     "securities_available",
@@ -48,6 +52,7 @@ FACT_FIELDS = [
     "weak_evidence_fields",
     "blocking_missing_fields",
     "blocking_weak_evidence_fields",
+    "next_blocker",
     "kg_readiness_reasons",
     "confidence_summary",
     "kg_readiness_status",
@@ -60,7 +65,6 @@ KG_BLOCKING_MISSING_FIELDS = {
     "bottom_drain_scope",
     "yard_line_scope",
     "contract_price",
-    "payment_schedule_total",
     "quality_requirements_available",
     "video_inspection_available",
     "handover_or_reception_available",
@@ -123,7 +127,12 @@ def decimal_or_none(value: Any) -> Decimal | None:
 
 
 def money(value: Decimal | None) -> str | None:
-    return None if value is None else str(value.quantize(Decimal("0.01")))
+    if value is None:
+        return None
+    rounded = value.quantize(Decimal("0.01"))
+    if rounded == Decimal("0.00"):
+        rounded = abs(rounded)
+    return str(rounded)
 
 
 def bool_from_count(count: int | None) -> bool:
@@ -134,6 +143,24 @@ def payment_matches(contract_price: Decimal | None, payment_total: Decimal | Non
     if contract_price is None or payment_total is None:
         return None
     return abs(contract_price - payment_total) <= Decimal("1.00")
+
+
+def payment_difference(
+    contract_price: Decimal | None,
+    payment_total: Decimal | None,
+) -> Decimal | None:
+    if contract_price is None or payment_total is None:
+        return None
+    return (payment_total - contract_price).quantize(Decimal("0.01"))
+
+
+def payment_difference_pct(
+    contract_price: Decimal | None,
+    difference: Decimal | None,
+) -> Decimal | None:
+    if contract_price is None or contract_price == 0 or difference is None:
+        return None
+    return ((difference / contract_price) * Decimal("100")).quantize(Decimal("0.01"))
 
 
 def calculate_price_per_apartment(
@@ -163,7 +190,7 @@ def determine_kg_readiness(
     if text_layer_status == "fail":
         return "not_ready"
     critical = {"apartments_count", "contract_price"}
-    if critical.issubset(set(blocking_missing_fields)):
+    if critical.intersection(blocking_missing_fields):
         return "not_ready"
     if payment_schedule_matches_contract_price is False:
         return "needs_review"
@@ -193,6 +220,23 @@ def readiness_reasons(
     if not reasons and kg_readiness_status == "ready":
         reasons.append("all blocking facts have acceptable evidence")
     return reasons
+
+
+def next_blocker(
+    text_layer_status: str,
+    blocking_missing_fields: list[str],
+    blocking_weak_evidence_fields: list[str],
+    payment_schedule_matches_contract_price: bool | None,
+) -> str | None:
+    if text_layer_status == "fail":
+        return "text_layer_status"
+    if blocking_missing_fields:
+        return blocking_missing_fields[0]
+    if blocking_weak_evidence_fields:
+        return blocking_weak_evidence_fields[0]
+    if payment_schedule_matches_contract_price is False:
+        return "payment_schedule_matches_contract_price"
+    return None
 
 
 def confidence_summary(missing_fields: list[str], weak_evidence_fields: list[str]) -> str:
@@ -415,10 +459,19 @@ def build_project_facts(
         facts.values.get("payment_schedule_matches_contract_price"),
         kg_readiness_status,
     )
+    payment_reason = facts.values.get("payment_schedule_readiness_reason")
+    if payment_reason and payment_reason not in reasons:
+        reasons.append(payment_reason)
     facts.values["missing_fields"] = ", ".join(facts.missing_fields)
     facts.values["weak_evidence_fields"] = ", ".join(facts.weak_evidence_fields)
     facts.values["blocking_missing_fields"] = ", ".join(blocking_missing)
     facts.values["blocking_weak_evidence_fields"] = ", ".join(blocking_weak)
+    facts.values["next_blocker"] = next_blocker(
+        text_layer_status,
+        blocking_missing,
+        blocking_weak,
+        facts.values.get("payment_schedule_matches_contract_price"),
+    )
     facts.values["kg_readiness_reasons"] = "; ".join(reasons)
     facts.values["confidence_summary"] = confidence_summary(
         facts.missing_fields, facts.weak_evidence_fields
@@ -532,22 +585,63 @@ def _add_finance(
         )
 
     payment_total = None
+    payment_item_count = 0
     if contract_id:
-        payment_total = decimal_or_none(
-            _fetch_scalar(
-                conn,
-                """
-                SELECT coalesce(sum(amount_gross), sum(amount_net))
-                FROM finance.payment_schedule_items
-                WHERE contract_id = %s
-                """,
-                (contract_id,),
-            )
+        payment_row = _fetch_one(
+            conn,
+            """
+            SELECT
+                count(*) AS item_count,
+                sum(amount_gross) AS gross_total,
+                sum(amount_net) AS net_total,
+                count(*) FILTER (WHERE amount_gross IS NULL) AS missing_gross_count
+            FROM finance.payment_schedule_items
+            WHERE contract_id = %s
+            """,
+            (contract_id,),
         )
+        payment_item_count = int((payment_row or {}).get("item_count") or 0)
+        missing_gross_count = int((payment_row or {}).get("missing_gross_count") or 0)
+        if payment_item_count and missing_gross_count == 0:
+            payment_total = decimal_or_none((payment_row or {}).get("gross_total"))
+        elif payment_item_count and missing_gross_count == payment_item_count:
+            payment_total = decimal_or_none((payment_row or {}).get("net_total"))
     facts.values["payment_schedule_total"] = money(payment_total)
+    payment_doc_found, payment_doc_ev = _document_type_evidence(
+        conn,
+        project_code,
+        ["payment_schedule"],
+        "payment_schedule_evidence_status",
+    )
     if payment_total is None:
         facts.missing_fields.append("payment_schedule_total")
+        if payment_item_count:
+            payment_status = "ambiguous_amount_basis"
+            payment_reason = (
+                "Payment schedule rows exist, but gross/net basis is mixed or ambiguous; "
+                "manual review is required."
+            )
+            facts.weak_evidence_fields.extend(
+                ["payment_schedule_total", "payment_schedule_matches_contract_price"]
+            )
+        elif payment_doc_found:
+            payment_status = "document_present_not_structured"
+            payment_reason = (
+                "Payment schedule document is linked, but no reliable structured payment rows "
+                "were found yet."
+            )
+            facts.weak_evidence_fields.extend(
+                ["payment_schedule_total", "payment_schedule_matches_contract_price"]
+            )
+        else:
+            payment_status = "no_payment_schedule_source"
+            payment_reason = (
+                "No payment schedule document or structured rows are linked; comparison is "
+                "visible but non-blocking for this readiness gate."
+            )
     else:
+        payment_status = "structured_total"
+        payment_reason = "Structured payment schedule total is available."
         facts.evidence.append(
             evidence(
                 "payment_schedule_total",
@@ -560,9 +654,46 @@ def _add_finance(
         )
 
     matches = payment_matches(contract_price, payment_total)
+    difference = payment_difference(contract_price, payment_total)
+    difference_pct = payment_difference_pct(contract_price, difference)
     facts.values["payment_schedule_matches_contract_price"] = matches
-    if matches is None:
+    facts.values["payment_schedule_difference"] = money(difference)
+    facts.values["payment_schedule_difference_pct"] = money(difference_pct)
+    if matches is True:
+        payment_status = "structured_match"
+        payment_reason = "Structured payment schedule total matches contract price within 1.00 EUR."
+    elif matches is False:
+        payment_status = "structured_mismatch"
+        payment_reason = (
+            "Structured payment schedule total differs from contract price by "
+            f"{money(difference)} EUR ({money(difference_pct)}%)."
+        )
         facts.weak_evidence_fields.append("payment_schedule_matches_contract_price")
+    elif contract_price is None:
+        payment_status = "contract_price_missing"
+        payment_reason = "Payment schedule comparison cannot be made because contract price is missing."
+    facts.values["payment_schedule_evidence_status"] = payment_status
+    facts.values["payment_schedule_readiness_reason"] = payment_reason
+    if payment_doc_ev:
+        facts.evidence.append(
+            {
+                **payment_doc_ev,
+                "value": payment_status,
+                "evidence_note": payment_reason,
+            }
+        )
+    else:
+        facts.evidence.append(
+            evidence(
+                "payment_schedule_evidence_status",
+                payment_status,
+                "finance.payment_schedule_items",
+                "count",
+                "medium",
+                payment_reason,
+                payment_item_count=payment_item_count,
+            )
+        )
 
     apartments = facts.values.get("apartments_count")
     price_per_apartment = calculate_price_per_apartment(

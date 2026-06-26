@@ -164,6 +164,8 @@ Knowledge graph -kerrosta ei rakenneta ennen kuin kaksi porttia on kunnossa:
 
 `kg_readiness_status` voi olla `ready`, `needs_review` tai `not_ready`. Se kertoo, voidaanko projektin faktat viedä myöhemmin graafikerrokseen ilman että puuttuvat tiedot, heikko evidence tai tekstikerroksen virheet piiloutuvat.
 
-`needs_review` muuttuu `ready`-tilaksi vasta, kun blokkaavat faktat löytyvät ja niillä on riittävä evidence. Blokkaavia kenttiä ovat erityisesti asuntojen määrä, JV-pystylinjat, JV-laajuus, pohja-/tonttiviemärin rajaus, sopimushinta, maksueräsumma sekä laatu-, videotarkastus-, vastaanotto- ja takuutieto. Ei-blokkaavat puutteet, kuten kerrosala tai liiketilojen määrä, voivat jäädä näkyviin `missing_fields`-kenttään ilman että ne yksin estävät KG-valmiutta.
+`needs_review` muuttuu `ready`-tilaksi vasta, kun blokkaavat faktat löytyvät ja niillä on riittävä evidence. Blokkaavia kenttiä ovat erityisesti asuntojen määrä, JV-pystylinjat, JV-laajuus, pohja-/tonttiviemärin rajaus, sopimushinta sekä laatu-, videotarkastus-, vastaanotto- ja takuutieto. Ei-blokkaavat puutteet, kuten kerrosala tai liiketilojen määrä, voivat jäädä näkyviin `missing_fields`-kenttään ilman että ne yksin estävät KG-valmiutta.
+
+Maksueriä käsitellään erikseen. Jos rakenteiset maksuerärivit löytyvät, raportti laskee `payment_schedule_total`-summan, vertaa sitä sopimushintaan yhden euron pyöristystoleranssilla ja näyttää erotuksen kentissä `payment_schedule_difference` ja `payment_schedule_difference_pct`. Jos maksueräasiakirja on linkitetty mutta rakenteisia rivejä ei vielä ole, projekti jää `needs_review`-tilaan. Jos erillistä maksuerälähdettä ei ole lainkaan, puute jää näkyviin mutta ei yksin blokkaa valmiutta; tämä näkyy kentissä `payment_schedule_evidence_status`, `payment_schedule_readiness_reason` ja `next_blocker`.
 
 
