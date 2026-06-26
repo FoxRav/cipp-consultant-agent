@@ -73,7 +73,7 @@ Audit-huomio: `raw.extraction_runs` säilyttää myös epäonnistuneet testi- ja
 Seuraavat kehitysaskeleet tehdään tässä järjestyksessä:
 
 1. **Käsittelyn laaturaportti.** Komento `cipp-report-processing-quality` näyttää projektikohtaisesti tiedostomäärät, tekstisivut, uusimmat onnistuneet purut, epäonnistuneet ajot, OCR-tarpeet ja puuttuvat tekstit.
-2. **Markdown- ja section-kerroksen päivitys.** Päivitetään `data/extracted/.../markdown` ja `doc.sections`, jotta OCR- ja DWG-peräiset tekstit tulevat mukaan hakuun.
+2. **Markdown- ja section-kerroksen päivitys.** `cipp-build-markdown` kokoaa kaikki saman dokumenttityypin raw-tekstit yhteen markdowniin ja `cipp-load-markdown-sections --ensure-raw-documents --prune-missing-markdown` vie ne `doc.sections`- ja `doc.clauses`-kerrokseen.
 3. **Projektifaktojen rikastus.** Poimitaan jokaisesta hankkeesta samat vertailukentät: asuntojen määrä, JV/SV-laajuus, pystylinjat, pohjaviemärit, tonttilinjat, hinnat, lisätyöt, vastaanotto, puutteet, takuu ja videotarkastukset.
 4. **Vertailukelpoisuusmatriisi.** Rakennetaan raportti, jossa jokainen referenssi näkyy samoilla sarakkeilla ja puuttuvat tiedot erottuvat.
 5. **Ensimmäinen kysely-MVP.** Käyttäjä antaa taloyhtiön tiedot, järjestelmä valitsee lähimmän referenssikohteen ja antaa alustavan hinta-/riskikommentin lähdeaineiston perusteella.
@@ -545,9 +545,11 @@ Rakentaa PDF-sivuista markdown-asiakirjat.
 Mitä se tekee:
 
 - lukee sivutekstit `raw.pages`-taulusta
-- ryhmittelee ne asiakirjatyypin mukaan
+- ryhmittelee ne asiakirjatyypin mukaan, myös OCR-, DWG-PDF-, Office- ja LibreOffice-/remaining-putken tekstit
 - redaktoi tunnistettavia henkilötietoja ja yhteystietoja
 - kirjoittaa markdownit `data/extracted/<project>/markdown/`-kansioon
+- siivoaa vanhat markdownit ennen uutta ajoa, jotta stale-tiedostot eivät päädy hakuindeksiin
+- lisää sivukohtaiset lähde- ja extractor-metatiedot markdowniin
 - kirjaa tietosuojahavainnot `audit.pii_findings`-tauluun
 
 Tämä on kohta, jossa raakateksti muuttuu ihmiselle ja parserille helpommin luettavaksi muodoksi.
@@ -688,7 +690,10 @@ Lataa markdown-asiakirjojen sisällön tietokannan dokumenttikerrokseen.
 Mitä se tekee:
 
 - lukee `data/extracted/<project>/markdown/`-kansion markdownit
-- pilkkoo ne osioihin
+- pilkkoo ne osioihin, myös lähdekohtaiset `Source N / Page N` -otsikot
+- voi luoda puuttuvat `core.contract_documents`-rivit raw-lähteiden dokumenttityypeistä lipulla `--ensure-raw-documents`
+- voi poistaa projektin vanhat sectionit ennen uutta latausta lipulla `--prune-missing-markdown`
+- tallentaa lähdetiedoston, lähdetiedoston id:n, extractor-nimen ja extractor-statuksen `doc.sections.metadata`-kenttään silloin kun tiedot ovat saatavilla
 - tallentaa osiot `doc.sections`-tauluun
 - tallentaa hakukelpoisia katkelmia `doc.clauses`-tauluun
 - käyttää fallback-logiikkaa, jos esimerkiksi yksikköhinnat löytyvät urakoitsijan tarjouksesta eivätkä omasta `unit_prices.md`-tiedostosta
@@ -878,7 +883,7 @@ cipp-link-contract-documents --project-code reference_001
 Lataa markdown-osiot ja tekstikatkelmat tietokantaan.
 
 ```powershell
-cipp-load-markdown-sections --project-code reference_001 --markdown-dir data/extracted/reference_001/markdown
+cipp-load-markdown-sections --project reference_001 --input data/extracted/reference_001/markdown --ensure-raw-documents --prune-missing-markdown
 ```
 
 ### `cipp-import-finlex-legal-xml`

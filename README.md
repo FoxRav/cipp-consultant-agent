@@ -151,7 +151,7 @@ cipp-extract-visual-ocr --project reference_001 --output data\extracted\visual_o
 cipp-report-processing-quality --output data\reports\processing_quality_report.md
 cipp-build-markdown --project reference_001 --output data\extracted\reference_001\markdown
 cipp-link-contract-documents --project reference_001
-cipp-load-markdown-sections --project reference_001 --input data\extracted\reference_001\markdown
+cipp-load-markdown-sections --project reference_001 --input data\extracted\reference_001\markdown --ensure-raw-documents --prune-missing-markdown
 ```
 
 

@@ -4,6 +4,7 @@ import argparse
 import re
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 import psycopg
 from psycopg.rows import dict_row
@@ -81,8 +82,58 @@ def normalize_text(text: str) -> str:
     return text.strip()
 
 
+def source_page_heading(source_order: int, page_no: int, filename: str) -> str:
+    safe_filename = filename.replace("\n", " ").strip()
+    return f"## Source {source_order:03d} / Page {page_no:03d}: {safe_filename}"
+
+
+def render_document_markdown(
+    document_type: str,
+    source_files: list[dict[str, Any]],
+    pages_by_source: dict[Any, list[dict[str, Any]]],
+) -> tuple[str, list[tuple[Any, str, str]]]:
+    parts = [
+        f"# {document_type}",
+        "",
+        f"Document type: `{document_type}`",
+        f"Source files: {len(source_files)}",
+        "",
+    ]
+    findings_by_source: list[tuple[Any, str, str]] = []
+
+    for source_order, source_file in enumerate(source_files, start=1):
+        source_file_id = source_file["id"]
+        pages = pages_by_source.get(source_file_id, [])
+        for page in pages:
+            redacted, findings = redact_text(normalize_text(page["raw_text"] or ""))
+            for pii_type, replacement in findings:
+                findings_by_source.append((source_file_id, pii_type, replacement))
+
+            parts.extend(
+                [
+                    source_page_heading(
+                        source_order,
+                        int(page["page_no"]),
+                        str(source_file["original_filename"]),
+                    ),
+                    "",
+                    f"Source file: `{source_file['original_filename']}`",
+                    f"Source file id: `{source_file_id}`",
+                    f"Extractor: `{page['extractor_name'] or 'unknown'}`",
+                    f"Extractor status: `{page['extraction_status'] or 'unknown'}`",
+                    "",
+                    redacted,
+                    "",
+                ]
+            )
+
+    return "\n".join(parts).strip() + "\n", findings_by_source
+
+
 def build_markdown(project_code: str, output_dir: Path, db_url: str) -> int:
     output_dir.mkdir(parents=True, exist_ok=True)
+    for markdown_path in output_dir.glob("*.md"):
+        markdown_path.unlink()
     count = 0
 
     with psycopg.connect(db_url, row_factory=dict_row) as conn:
@@ -92,12 +143,13 @@ def build_markdown(project_code: str, output_dir: Path, db_url: str) -> int:
                 SELECT id, original_filename, document_type
                 FROM raw.source_files
                 WHERE project_code = %s
-                ORDER BY original_filename
+                ORDER BY document_type, original_filename, id
                 """,
                 (project_code,),
             )
             source_files = cur.fetchall()
 
+            pages_by_source: dict[Any, list[dict[str, Any]]] = {}
             for source_file in source_files:
                 cur.execute(
                     "DELETE FROM audit.pii_findings WHERE source_file_id = %s",
@@ -105,9 +157,14 @@ def build_markdown(project_code: str, output_dir: Path, db_url: str) -> int:
                 )
                 cur.execute(
                     """
-                    SELECT page_no, raw_text
-                    FROM raw.pages
-                    WHERE source_file_id = %s
+                    SELECT
+                        p.page_no,
+                        p.raw_text,
+                        er.extractor_name,
+                        er.status AS extraction_status
+                    FROM raw.pages p
+                    LEFT JOIN raw.extraction_runs er ON er.id = p.extraction_run_id
+                    WHERE p.source_file_id = %s
                     ORDER BY page_no
                     """,
                     (source_file["id"],),
@@ -115,25 +172,25 @@ def build_markdown(project_code: str, output_dir: Path, db_url: str) -> int:
                 pages = cur.fetchall()
                 if not pages:
                     continue
+                pages_by_source[source_file["id"]] = pages
 
-                parts = [
-                    f"# {source_file['document_type']}",
-                    "",
-                    f"Source file: `{source_file['original_filename']}`",
-                    "",
-                ]
-                all_findings: list[tuple[str, str]] = []
-                for page in pages:
-                    redacted, findings = redact_text(normalize_text(page["raw_text"] or ""))
-                    all_findings.extend(findings)
-                    parts.extend([f"## Page {page['page_no']}", "", redacted, ""])
+            grouped: dict[str, list[dict[str, Any]]] = {}
+            for source_file in source_files:
+                if source_file["id"] in pages_by_source:
+                    grouped.setdefault(str(source_file["document_type"]), []).append(source_file)
 
-                slug = source_file["document_type"]
+            for document_type, grouped_source_files in sorted(grouped.items()):
+                markdown, findings = render_document_markdown(
+                    document_type,
+                    grouped_source_files,
+                    pages_by_source,
+                )
+                slug = document_type
                 markdown_path = output_dir / f"{slug}.md"
-                markdown_path.write_text("\n".join(parts).strip() + "\n", encoding="utf-8")
+                markdown_path.write_text(markdown, encoding="utf-8")
                 count += 1
 
-                for pii_type, replacement in sorted(set(all_findings)):
+                for source_file_id, pii_type, replacement in sorted(set(findings)):
                     cur.execute(
                         """
                         INSERT INTO audit.pii_findings (
@@ -143,7 +200,7 @@ def build_markdown(project_code: str, output_dir: Path, db_url: str) -> int:
                         VALUES (%s,%s,%s, encode(digest(%s, 'sha256'), 'hex'), %s, 'redact')
                         """,
                         (
-                            source_file["id"],
+                            source_file_id,
                             markdown_path.as_posix(),
                             pii_type,
                             replacement,
