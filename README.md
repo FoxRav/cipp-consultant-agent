@@ -1,6 +1,6 @@
 # CIPP Contract Database
 
-PostgreSQL + pgvector -pohjainen tietokantapohja CIPP-sukitusurakoiden sopimuspakettien inventointiin, normalisointiin, validointiin, hakuun ja myöhempään sopimusluonnosten generointiin.
+PostgreSQL + pgvector -pohjainen CIPP-tietopohja sopimuspakettien inventointiin, normalisointiin, validointiin, knowledge graph -suhdekerrokseen ja lähdeperustaiseen retrievaliin.
 
 ## Riippuvuudet
 
@@ -185,5 +185,18 @@ cipp-build-knowledge-graph --project-code reference_001 --prune
 ```
 
 Jokaiselle entitylle tai relaatiolle pyritään tallentamaan evidence `kg.evidence`-tauluun esimerkiksi `source_table/source_id`-, `source_file_id`-, `section_id`- tai `clause_id`-viitteellä. Tätä PostgreSQL-native KG:tä käytetään myöhemmin GraphRAG-/hybrid retrieval -vaiheessa rajaamaan ja perustelemaan hakuja, mutta graafiin ei tallenneta suhteita ilman jäljitettävää alkuperää.
+
+## User-case retrieval packet
+
+Järjestelmä ei ole referenssiprojektien kyselybotti. Käyttäjä kysyy omaa taloyhtiötään tai yleistä CIPP-sukitusurakkaa koskevan kysymyksen. Referenssiprojektit ovat sisäinen, anonymisoitu grounding-aineisto.
+
+`cipp-build-retrieval-packet` rakentaa vastausaineiston, mutta ei vielä muodosta lopullista agenttivastausta eikä kutsu LLM:ää. Se tunnistaa kysymyksestä aiheen deterministisesti, hakee relevantit `kg.entities`- ja `kg.relations`-rivit, liittää `kg.evidence`-todisteet ja hakee tarvittaessa tekstikatkelmat `doc.sections`-, `doc.clauses`- ja `raw.pages`-kerroksista.
+
+```powershell
+cipp-build-retrieval-packet --question "Mitä maksueristä kannattaa sopia CIPP-sukitusurakassa?" --output data/reports/retrieval_packet.json --output-md data/reports/retrieval_packet.md
+cipp-build-retrieval-packet --question "Mitä pitää huomioida taloyhtiön JV-pystylinjojen ja pohjaviemärin sukituksessa?" --apartments-count 30 --jv-verticals-count 8 --includes-bottom-drain true --output data/reports/retrieval_packet_jv.json --output-md data/reports/retrieval_packet_jv.md
+```
+
+Packetin `answer_scope` on `general_cipp_user_case`. `reference_usage.mode` on `internal_anonymized_grounding`, ja Markdown-raportissa referenssit näkyvät vain `reference_001`-tyyppisinä sisäisinä lähteinä. `--debug-reference-project-code` on vain kehittäjän tarkistukseen, ei normaali käyttäjäkyselyn käyttötapa.
 
 

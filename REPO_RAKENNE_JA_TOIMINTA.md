@@ -77,9 +77,10 @@ Seuraavat kehitysaskeleet tehdään tässä järjestyksessä:
 3. **Projektifaktojen rikastus.** Poimitaan jokaisesta hankkeesta samat vertailukentät: asuntojen määrä, JV/SV-laajuus, pystylinjat, pohjaviemärit, tonttilinjat, hinnat, lisätyöt, vastaanotto, puutteet, takuu ja videotarkastukset.
 4. **Vertailukelpoisuusmatriisi.** Komento `cipp-report-reference-facts` rakentaa raportin, jossa jokainen referenssi näkyy samoilla sarakkeilla ja puuttuvat tiedot erottuvat.
 5. **PostgreSQL-native knowledge graph.** `cipp-build-knowledge-graph` kokoaa rakenteisista tietokantatauluista todistettavan suhdeverkon `kg`-skeemaan ilman Neo4j:tä tai LLM-arvauksia.
-6. **Ensimmäinen kysely-MVP.** Käyttäjä antaa taloyhtiön tiedot, järjestelmä valitsee lähimmän referenssikohteen ja antaa alustavan hinta-/riskikommentin lähdeaineiston perusteella.
+6. **User-case retrieval packet.** `cipp-build-retrieval-packet` hakee käyttäjän CIPP-kysymykseen liittyvät entityt, suhteet, evidencen ja tekstikatkelmat ilman LLM-agenttia.
+7. **Ensimmäinen kysely-MVP.** Käyttäjä antaa taloyhtiön tiedot, järjestelmä valitsee lähimmän referenssikohteen ja antaa alustavan hinta-/riskikommentin lähdeaineiston perusteella.
 
-Tämän suunnitelman nykyinen konkreettinen toteutettu osa on PostgreSQL-native knowledge graph -kerros.
+Tämän suunnitelman nykyinen konkreettinen toteutettava osa on user-case retrieval packet -kerros.
 
 Tärkeä rajaus: `kg` voidaan rakentaa olemassa olevista rakenteisista riveistä, mutta GraphRAG-/LLM-pohjaista käyttöä ei aloiteta ennen kuin tekstikerroksen ja vertailufaktamatriisin hyväksymisportit ovat kunnossa. Tavoite on välttää tilanne, jossa vastaus näyttäisi täsmälliseltä mutta perustuisi puuttuviin tai heikosti jäljitettäviin faktoihin.
 
@@ -211,6 +212,7 @@ src/cipp_contracts/
   normalize/   asiakirjatekstin muuntaminen kanoniseksi malliksi
   load/        kanonisen mallin lataus PostgreSQL-tietokantaan
   kg/          PostgreSQL-native knowledge graph -rakentaja
+  retrieve/    user-case retrieval packet -rakentaja
   price/       JV-urakan hinta-arviolaskenta
   validate/    canonical JSON -validointi
   embed/       varattu embedding-/vektorointikerrokselle
@@ -748,7 +750,32 @@ Mitä se tekee:
 
 Tämä builder ei käytä LLM:ää eikä arvaa puuttuvia suhteita. Jos suhteelle ei löydy rakenteista riviä tai lähdejälkeä, sitä ei rakenneta.
 
-## 13. Validate: laadunvarmistus
+## 13. Retrieve: käyttäjäkysymyksen aineistopaketti
+
+### `src/cipp_contracts/retrieve/build_retrieval_packet.py`
+
+Rakentaa lähdeperustaisen retrieval-paketin käyttäjän CIPP-aiheisesta kysymyksestä.
+
+Tärkeä tuoterajaus:
+
+- järjestelmä ei ole referenssiprojektien kyselybotti
+- referenssiprojektit ovat sisäinen, anonymisoitu tietopohja
+- käyttäjä kysyy omaa taloyhtiötään tai yleistä CIPP-sukitusurakkaa koskevan kysymyksen
+- moduuli ei muodosta vielä lopullista agenttivastausta eikä kutsu LLM:ää
+
+Mitä se tekee:
+
+- tunnistaa kysymyksestä aiheen deterministisesti, esimerkiksi maksuerät, urakkarajat, JV/SV-segmentit, videotarkastuksen, vastaanoton, takuun tai lisätyöt
+- tallentaa käyttäjän taloyhtiön vihjeet `user_case`-osioon, esimerkiksi asuntojen määrän, pystylinjojen määrän ja pohjaviemärin mukanaolon
+- hakee aiheen mukaiset `kg.entities`-solmut ja 1-hop `kg.relations`-suhteet
+- hakee `kg.evidence`-rivit
+- hakee evidencen perusteella `doc.sections`-, `doc.clauses`- ja `raw.pages`-tekstikatkelmat
+- anonymisoi referenssien käytön `reference_001`-tyyppisiksi sisäisiksi lähteiksi
+- palauttaa JSON- ja Markdown-muotoisen retrieval-paketin
+
+Tämä on v0.5.0-kehityslinjan ensimmäinen vaihe. Myöhempi hybrid RAG / GraphRAG -vastauslogiikka käyttää tätä pakettia vastauksen aineistona.
+
+## 14. Validate: laadunvarmistus
 
 ### `src/cipp_contracts/validate/validate_canonical_contract.py`
 
@@ -765,7 +792,7 @@ Se tarkistaa esimerkiksi:
 
 Validointi ei ratkaise kaikkea, mutta se estää pahimmat rakenteelliset virheet ennen latausta.
 
-## 14. Price: JV-hinta-arvio
+## 15. Price: JV-hinta-arvio
 
 ### `src/cipp_contracts/price/estimate_jv_price.py`
 
@@ -793,7 +820,7 @@ Lisäksi käytetään kokemusperäistä haarukkaa:
 
 Moduuli voi myös tallentaa arvion `finance.price_estimates`-tauluun.
 
-## 15. Embed ja search
+## 16. Embed ja search
 
 ### `src/cipp_contracts/embed/`
 
@@ -816,7 +843,7 @@ Tuleva rooli:
 - hakea vastaukselle lähdekatkelmat
 - tukea CIPP-kysymys-vastauslogiikkaa
 
-## 16. SQL-kyselyt
+## 17. SQL-kyselyt
 
 ### `db/queries/search_full_text.sql`
 
@@ -864,7 +891,23 @@ Näyttää relaation ja siihen liittyvän evidencen.
 
 Tiivistää projektikohtaisesti KG-solmut, suhteet ja evidence-kattavuuden.
 
-## 17. Komentorivityökalut
+### `db/queries/retrieval_entity_search.sql`
+
+Hakee kysymyksen aiheeseen sopivia KG-entityjä entity-tyyppien ja avainsanojen avulla.
+
+### `db/queries/retrieval_kg_neighborhood.sql`
+
+Hakee valittujen entityjen 1-hop KG-naapuruston.
+
+### `db/queries/retrieval_evidence_context.sql`
+
+Hakee valittujen entityjen ja relaatioiden evidence-rivit.
+
+### `db/queries/retrieval_user_case_candidates.sql`
+
+Auttaa myöhemmin etsimään käyttäjän taloyhtiön tietoihin lähimpiä sisäisiä vertailukohteita.
+
+## 18. Komentorivityökalut
 
 `pyproject.toml` määrittää nämä komennot, kun paketti on asennettu kehitystilaan.
 
@@ -1002,7 +1045,18 @@ cipp-build-knowledge-graph --project-code reference_001 --prune
 
 `--dry-run` tarkistaa rakentamisen ilman kirjoituksia. `--prune` poistaa valitun projektin vanhat KG-solmut ennen uudelleenrakennusta. `--all` rakentaa kaikki kannassa olevat referenssiprojektit.
 
-## 18. Tyypillinen uuden projektin käsittely
+### `cipp-build-retrieval-packet`
+
+Rakentaa käyttäjän CIPP-kysymykselle JSON- ja Markdown-muotoisen retrieval-paketin.
+
+```powershell
+cipp-build-retrieval-packet --question "Mitä maksueristä kannattaa sopia CIPP-sukitusurakassa?" --output data/reports/retrieval_packet.json --output-md data/reports/retrieval_packet.md
+cipp-build-retrieval-packet --question "Mitä pitää huomioida taloyhtiön JV-pystylinjojen ja pohjaviemärin sukituksessa?" --apartments-count 30 --jv-verticals-count 8 --includes-bottom-drain true --output data/reports/retrieval_packet_jv.json --output-md data/reports/retrieval_packet_jv.md
+```
+
+Komento ei vastaa käyttäjän puolesta, vaan palauttaa aineiston. Se ei käytä referenssiprojektikoodia normaalina hakukohteena. `--debug-reference-project-code` on vain kehittäjän tarkistusta varten.
+
+## 19. Tyypillinen uuden projektin käsittely
 
 Kun uusi hanke lisätään, tavoite on saada se samaan vertailukelpoiseen muotoon kuin aiemmat hankkeet.
 
@@ -1023,7 +1077,7 @@ Tyypillinen eteneminen:
 
 Tärkeä periaate: kaikissa projekteissa ei ole samaa asiakirjakokonaisuutta, mutta samat olennaiset tiedot pyritään löytämään eri lähteistä. Tarjouspyyntö on yleensä paras lähde teknisille perustiedoille.
 
-## 19. Projektien vertailukelpoisuus
+## 20. Projektien vertailukelpoisuus
 
 Vertailukelpoisuus syntyy kolmesta asiasta:
 
@@ -1039,7 +1093,7 @@ Esimerkki:
 
 Järjestelmän tehtävä on saada nämä eri lähteistä tulevat tiedot samaan rakenteeseen, jotta kysymykset voidaan vastata vertaamalla projekteja eikä vain lukemalla yksittäistä PDF:ää.
 
-## 20. Tärkeimmät CIPP-käsitteet repossa
+## 21. Tärkeimmät CIPP-käsitteet repossa
 
 ### JV-linjat
 
@@ -1082,7 +1136,7 @@ Vastaanotto on hetki, jossa urakoitsija luovuttaa työmaan takaisin taloyhtiön 
 - mitä maksueriä voidaan hyväksyä
 - mitä takuuajan asioita seurataan
 
-## 21. Testit
+## 22. Testit
 
 ### `tests/test_validate_canonical_contract.py`
 
@@ -1111,7 +1165,7 @@ Varmistaa JV-hinta-arvion peruslogiikan:
 
 Sisältää ensimmäiset arviointikysymykset Referenssikohde An aineistolle. Näiden avulla voidaan myöhemmin testata, osaako hakukerros löytää oikean lähdeasiakirjan.
 
-## 22. Mitä tiedostoja yleensä muokataan?
+## 23. Mitä tiedostoja yleensä muokataan?
 
 Kun lisätään uusi hanke:
 
@@ -1135,7 +1189,7 @@ Kun parannetaan käyttäjän kysymyksiin vastaamista:
 - rakennetaan hakukerrosta `search/`
 - lisätään eval-kysymyksiä `tests/eval_questions/`
 
-## 23. Mitä ei yleensä muokata käsin?
+## 24. Mitä ei yleensä muokata käsin?
 
 Näitä ei yleensä kannata muokata käsin:
 
@@ -1148,7 +1202,7 @@ Näitä ei yleensä kannata muokata käsin:
 
 Canonical JSONia voi tarkistaa käsin, mutta pitkällä aikavälillä tavoitteena on, että se syntyy mahdollisimman paljon parserien ja importerien kautta.
 
-## 24. Nykyiset tunnetut kehityskohdat
+## 25. Nykyiset tunnetut kehityskohdat
 
 ### Operatiivinen importer pitää vakioida
 
@@ -1186,7 +1240,7 @@ Tietokanta tukee jo pgvectoria, mutta varsinainen embedding-generointi ja semant
 
 PDF-putki on selkein. Jos projektien lisäaineistoissa on Word- tai Excel-tiedostoja, niille tarvitaan oma luotettava tekstin- ja taulukonpurku, jotta kokous-, vastaanotto- ja maksutiedot saadaan sisään yhtä hyvin kuin PDF:stä.
 
-## 25. Miten repo toimii käyttäjän kysymyksen kannalta?
+## 26. Miten repo toimii käyttäjän kysymyksen kannalta?
 
 Kun käyttäjä kysyy esimerkiksi:
 
@@ -1196,12 +1250,12 @@ Paljonko meidän taloyhtiön kaikkien JV-linjojen CIPP-urakka maksaisi?
 
 Järjestelmän pitäisi edetä näin:
 
-1. Käyttäjän kohteen tiedot normalisoidaan samoihin kenttiin kuin referenssihankkeet.
-2. Tietokannasta haetaan kaikki omat referenssihankkeet.
-3. Lähin referenssi valitaan asuntojen määrän, pystylinjojen, pohjaviemärin ja tonttiviemärin perusteella.
-4. Jos dataa puuttuu, Referenssikohde A toimii oletusreferenssinä.
-5. Hinta-arvio lasketaan ja perustellaan lähdedatalla.
-6. Vastaus kertoo myös epävarmuudet, esimerkiksi jos pohjaviemärin tai tonttilinjan pituus puuttuu.
+1. Käyttäjän kohteen tiedot tallennetaan `user_case`-vihjeiksi.
+2. Kysymyksestä tunnistetaan CIPP-aihe, esimerkiksi hinta, maksuerät, JV/SV-segmentit, urakkarajat tai laatu.
+3. `retrieve` hakee KG:stä aiheen kannalta relevantit entityt ja suhteet.
+4. `kg.evidence` linkittää löydökset `doc.sections`-, `doc.clauses`- ja `raw.pages`-teksteihin.
+5. Retrieval-paketti kertoo mitä tietoja puuttuu tarkempaa arviota varten.
+6. Myöhempi vastausgeneraattori muodostaa varsinaisen vastauksen tästä aineistosta.
 
 Kun käyttäjä kysyy esimerkiksi:
 
@@ -1209,7 +1263,7 @@ Kun käyttäjä kysyy esimerkiksi:
 Linjassa on jyijyä, mitä pitää tehdä?
 ```
 
-Järjestelmän pitäisi hakea:
+Retrieval-paketin pitäisi hakea:
 
 1. operatiiviset havainnot aiemmista projekteista
 2. kokouspöytäkirjat ja vastaanottodokumentit
@@ -1217,9 +1271,9 @@ Järjestelmän pitäisi hakea:
 4. sopimus- ja YSE-tason vastuut
 5. vastaavat ratkaisut aiemmista hankkeista
 
-Tavoite ei ole antaa pelkkää yleisvastausta, vaan vastata projektikokemuksen perusteella: mitä vastaavassa tilanteessa tehtiin, kuka vastasi, millä perusteella ja miten asia dokumentoitiin.
+Tavoite ei ole kysyä yksittäistä referenssiprojektia, vaan käyttää referenssejä sisäisenä, anonymisoituna tietopohjana: mitä vastaavissa tilanteissa on dokumentoitu, kuka vastasi, millä perusteella ja miten asia vietiin evidenceen.
 
-## 26. Ytimeen tiivistettynä
+## 27. Ytimeen tiivistettynä
 
 Repo rakentaa CIPP-urakoista vertailukelpoisen tietokannan.
 
@@ -1233,7 +1287,9 @@ Tärkein ajatus on tämä:
 - `finance` mallintaa hinnat ja maksut
 - `quality` mallintaa laadun, tarkastukset ja takuun
 - `ops` mallintaa oikean työmaan tapahtumat
+- `kg` mallintaa faktat ja suhteet todistettavana verkostona
+- `retrieve` kokoaa käyttäjäkysymyksen aineistopaketin
 - `rag` mahdollistaa hakemisen ja myöhemmin kysymys-vastausjärjestelmän
 
-Kun nämä kerrokset ovat kunnossa, uusi taloyhtiö voidaan verrata aiempiin todellisiin hankkeisiin eikä pelkkään yleiseen nyrkkisääntöön.
+Kun nämä kerrokset ovat kunnossa, uusi taloyhtiö voidaan käsitellä lähdeperustaisesti aiempien todellisten hankkeiden pohjalta ilman että käyttäjälle avataan luottamuksellisia referenssiprojekteja.
 
