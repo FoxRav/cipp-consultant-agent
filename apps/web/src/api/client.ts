@@ -93,14 +93,19 @@ export async function getSuggestedQuestions(): Promise<SuggestedQuestion[]> {
 export async function postAnswer(
   question: string,
   userCase: UserCase,
-  includeDebug: boolean
+  includeDebug: boolean,
+  accessToken?: string
 ): Promise<AnswerResponse> {
   if (USE_MOCK_API) {
     return mockAnswer(question, userCase, includeDebug);
   }
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (accessToken) {
+    headers.Authorization = `Bearer ${accessToken}`;
+  }
   const response = await fetch(`${API_BASE_URL}/api/answer`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers,
     body: JSON.stringify({
       question,
       user_case: userCase,

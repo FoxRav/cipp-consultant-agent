@@ -1231,6 +1231,10 @@ Frontendin pääosat:
 
 - `apps/web/src/App.tsx`: kokoaa playgroundin tilan, kyselyn ja vastauksen.
 - `apps/web/src/api/client.ts`: kutsuu `/api/app-config`, `/api/suggested-questions` ja `/api/answer`.
+- `apps/web/src/auth/authAdapter.ts`: valitsee auth-providerin `VITE_AUTH_PROVIDER`-asetuksesta.
+- `apps/web/src/auth/mockAuthAdapter.ts`: paikallinen mock login/register/logout -toteutus ilman verkkoa.
+- `apps/web/src/auth/supabaseAuthAdapter.ts`: Supabase-adapterin suunniteltu stub, joka ei vielä kytke oikeaa Supabase-clienttiä.
+- `apps/web/src/components/AuthPanel.tsx`: login/register/logout-prototyyppi ja session-kontekstin näyttö.
 - `apps/web/src/components/TopCaseBar.tsx`: taloyhtiön perustiedot ja toggle-parametrit.
 - `apps/web/src/components/QuestionPanel.tsx`: keskustelumainen kysymyskenttä ja debug-toggle.
 - `apps/web/src/components/AnswerCard.tsx`: lyhyt vastaus, key points, lähteisiin perustuvat huomiot ja jatkokysymykset.
@@ -1241,6 +1245,7 @@ Frontendin pääosat:
 - `apps/web/playwright.config.ts`: käynnistää Viten ja ajaa frontend smoke-testin mock API -tilassa.
 - `apps/web/tests/frontend-smoke.spec.ts`: varmistaa selaimessa, että yläpalkki, kysymys, vastaus, lähteet, epävarmuudet, debug ja sanitointi toimivat.
 - `docs/frontend_testing.md`: manuaalinen live API- ja mock API -testauslista.
+- `docs/supabase_auth_plan.md`: Supabase-authin rajaus, adapteripäätös ja seuraavat turvalliset askeleet.
 - `scripts/run_frontend_dev.ps1`: tulostaa paikallisen backend/frontend-käynnistysohjeen.
 
 Yläpalkin parametrit lähetetään aina API:iin `user_case`-osiossa. Tällä testataan nopeasti, miten esimerkiksi asuntojen määrä, JV-pystylinjat, SV-pystylinjat, kattokaivojen määrä, pohjaviemärin pituus, tonttilinjan pituus, sadevesilinjojen pituus, videotarkastus ja yksikköhinnat vaikuttavat puuttuviin tietoihin, epävarmuuksiin ja retrievalin painotukseen.
@@ -1250,6 +1255,8 @@ Frontendin oletusarvoissa `sv_verticals_count=4` ja `roof_drains_count=4`. Katto
 Tärkeä rajaus: frontend näyttää vastauksen, jonka source-grounded composer muodostaa. Se ei kutsu LLM:ää eikä saa näyttää referenssiprojektien oikeita nimiä tai raakaa tiedostopolkuja.
 
 Mock API -tila käynnistyy joko URL-parametrilla `?mock=1` tai frontendin paikallisella `VITE_USE_MOCK_API=true` -asetuksella. Mock-vastaus on tarkoitettu vain UI:n nopeaan testaukseen; live-testissä käytetään `cipp-run-dev-api`-palvelua ja oikeaa PostgreSQL-tietopohjaa.
+
+Auth-prototyyppi käyttää erillistä adapterirajapintaa. `mock` on oletusprovider ja tuottaa paikallisen sessionin selaimen localStorageen. `supabase` on tässä vaiheessa vain suunniteltu provider-stub: Supabasea ei vielä käytetä tuotantokirjautumiseen, eikä repo sisällä Supabase-avaimia. Oma CIPP-tietokanta pysyy pääjärjestelmänä.
 
 ## 20. Tyypillinen uuden projektin käsittely
 

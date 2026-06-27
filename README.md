@@ -328,3 +328,17 @@ npx playwright install chromium
 ```
 
 Manuaalinen testauslista on tiedostossa [frontend_testing.md](F:/-DEV-/97.cipp-contract-db/docs/frontend_testing.md).
+
+## Supabase auth planning
+
+Supabasea suunnitellaan vain auth- ja session-kerrokseksi. CIPP:n raskas dokumenttidata, KG, legal guidance, retrieval ja composer pysyvät omassa PostgreSQL/FastAPI-putkessa.
+
+Nykyisessä frontendissä on auth-adapterirajapinta ja mock login/register/logout -prototyyppi. Oletusprovider on `mock`, eikä oikeaa Supabase-clienttiä tai tuotanto-SaaS-käyttäjähallintaa ole vielä kytketty.
+
+```env
+VITE_AUTH_PROVIDER=mock
+# VITE_SUPABASE_URL=
+# VITE_SUPABASE_ANON_KEY=
+```
+
+Suunnitelma ja rajaukset ovat tiedostossa [supabase_auth_plan.md](F:/-DEV-/97.cipp-contract-db/docs/supabase_auth_plan.md).

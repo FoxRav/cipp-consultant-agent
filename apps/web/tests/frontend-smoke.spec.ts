@@ -4,6 +4,12 @@ test("frontend playground works with mock API", async ({ page }) => {
   await page.goto("/?mock=1");
 
   await expect(page.getByRole("heading", { name: "CIPP Consultant Agent" })).toBeVisible();
+  await expect(page.getByLabel("Auth prototype")).toBeVisible();
+  await expect(page.getByText("Mock auth")).toBeVisible();
+  await page.getByLabel("Auth email").fill("board@example.test");
+  await page.getByLabel("Auth password").fill("local-password");
+  await page.getByRole("button", { name: "Login" }).click();
+  await expect(page.getByText("board@example.test")).toBeVisible();
 
   const expectedFields = [
     "Asuntoja",
@@ -74,4 +80,7 @@ test("frontend playground works with mock API", async ({ page }) => {
   expect(bodyText).not.toContain(".xlsx");
   expect(bodyText).not.toContain(".csv");
   expect(bodyText).not.toContain("As Oy ");
+
+  await page.getByRole("button", { name: "Logout" }).click();
+  await expect(page.getByRole("button", { name: "Login" })).toBeVisible();
 });

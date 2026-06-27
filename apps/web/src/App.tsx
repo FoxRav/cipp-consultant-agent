@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { getAppConfig, getSuggestedQuestions, postAnswer, type AnswerResponse, type AppConfig, type SuggestedQuestion, type UserCase } from "./api/client";
+import { createAuthAdapter } from "./auth/authAdapter";
+import type { AuthSession } from "./auth/types";
 import { AnswerCard } from "./components/AnswerCard";
+import { AuthPanel } from "./components/AuthPanel";
 import { QuestionPanel } from "./components/QuestionPanel";
 import { SourcesPanel } from "./components/SourcesPanel";
 import { StatusBadges } from "./components/StatusBadges";
@@ -33,8 +36,10 @@ export default function App() {
   const [question, setQuestion] = useState("Mitä maksueristä kannattaa sopia CIPP-sukitusurakassa?");
   const [showDebug, setShowDebug] = useState(false);
   const [answer, setAnswer] = useState<AnswerResponse | null>(null);
+  const [session, setSession] = useState<AuthSession | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const authAdapter = useMemo(() => createAuthAdapter(), []);
 
   useEffect(() => {
     void Promise.all([getAppConfig(), getSuggestedQuestions()])
@@ -48,6 +53,10 @@ export default function App() {
       });
   }, []);
 
+  useEffect(() => {
+    void authAdapter.getSession().then(setSession).catch(() => setSession(null));
+  }, [authAdapter]);
+
   const fields = useMemo(() => config?.user_case_fields ?? [], [config]);
   const defaults = useMemo(() => ({ ...fallbackDefaults, ...(config?.defaults ?? {}) }), [config]);
 
@@ -59,7 +68,7 @@ export default function App() {
     setLoading(true);
     setError(null);
     try {
-      setAnswer(await postAnswer(nextQuestion, userCase, showDebug));
+      setAnswer(await postAnswer(nextQuestion, userCase, showDebug, session?.accessToken));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Vastauksen muodostus epäonnistui.");
     } finally {
@@ -74,7 +83,10 @@ export default function App() {
           <p className="eyebrow">Local dev playground</p>
           <h1>CIPP Consultant Agent</h1>
         </div>
-        <StatusBadges answer={answer} llmEnabled={config?.llm_enabled ?? false} />
+        <div className="hero-actions">
+          <StatusBadges answer={answer} llmEnabled={config?.llm_enabled ?? false} />
+          <AuthPanel adapter={authAdapter} session={session} onSessionChange={setSession} />
+        </div>
       </header>
 
       <TopCaseBar fields={fields} userCase={userCase} onChange={setUserCase} onReset={() => setUserCase(defaults)} />

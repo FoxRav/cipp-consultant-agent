@@ -42,6 +42,12 @@ button {
   padding: 20px 0 16px;
 }
 
+.hero-actions {
+  display: grid;
+  justify-items: end;
+  gap: 10px;
+}
+
 .hero-bar h1 {
   margin: 2px 0 0;
   font-size: 30px;
@@ -327,6 +333,67 @@ button {
   justify-content: flex-end;
 }
 
+.auth-panel {
+  display: grid;
+  gap: 8px;
+  min-width: min(520px, 100%);
+  padding: 10px;
+  border: 1px solid #d7e2e8;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 8px 28px rgba(35, 55, 70, 0.06);
+}
+
+.panel-label {
+  margin: 0 0 2px;
+  color: #607684;
+  font-size: 12px;
+  font-weight: 760;
+  text-transform: uppercase;
+}
+
+.auth-form,
+.auth-session {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.auth-form input,
+.auth-form select {
+  min-width: 132px;
+  border: 1px solid #cfdee6;
+  border-radius: 8px;
+  padding: 7px 9px;
+  background: #fbfdfe;
+}
+
+.auth-form button,
+.auth-session button {
+  border-radius: 8px;
+  padding: 8px 11px;
+  background: #165f6e;
+  color: #ffffff;
+  font-weight: 760;
+}
+
+.auth-form button:disabled {
+  opacity: 0.65;
+}
+
+.auth-session span {
+  color: #315864;
+  font-size: 13px;
+  font-weight: 740;
+}
+
+.auth-error {
+  margin: 0;
+  color: #8a2d31;
+  font-size: 13px;
+}
+
 .badge {
   padding: 6px 9px;
 }
@@ -400,5 +467,9 @@ button {
 
   .status-badges {
     justify-content: flex-start;
+  }
+
+  .hero-actions {
+    justify-items: stretch;
   }
 }
