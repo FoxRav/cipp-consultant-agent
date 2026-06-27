@@ -21,14 +21,24 @@ test("frontend playground works with mock API", async ({ page }) => {
     "Pohjaviemäri m",
     "Tonttilinja m",
     "Sadevesilinjat m",
-    "Kattokaivot",
-    "Videotarkastus",
-    "Yksikköhinnat / lisätyöt"
+    "Kattokaivot"
   ];
   const caseBar = page.getByLabel("Taloyhtiön perustiedot");
   for (const label of expectedFields) {
     await expect(caseBar.getByText(label, { exact: true })).toBeVisible();
   }
+  await expect(caseBar.getByText("Videotarkastus", { exact: true })).not.toBeVisible();
+  await expect(caseBar.getByText("Yksikköhinnat / lisätyöt", { exact: true })).not.toBeVisible();
+  await expect(page.getByRole("button", { name: "Videotarkastus" })).not.toBeVisible();
+  await expect(page.getByRole("button", { name: "Lisätyöt" })).not.toBeVisible();
+
+  await expect(page.getByLabel("Asuntoja")).toHaveValue("30");
+  await expect(page.getByLabel("Rakennuksia")).toHaveValue("1");
+  await expect(page.getByLabel("Porrashuoneita")).toHaveValue("3");
+  await expect(page.getByLabel("JV-pystyviemäreitä")).toHaveValue("15");
+  await expect(page.getByLabel("Pohjaviemäri m")).toHaveValue("50");
+  await expect(page.getByLabel("Tonttilinja m")).toHaveValue("30");
+  await expect(page.getByLabel("Sadevesilinjat m")).toHaveValue("30");
 
   const apartments = page.getByLabel("Asuntoja");
   await apartments.fill("42");
@@ -54,13 +64,15 @@ test("frontend playground works with mock API", async ({ page }) => {
   await jvVerticals.fill("11");
   await roofDrains.fill("6");
 
-  await page.getByLabel("Kysy CIPP-/sukitusurakasta").fill(
-    "Mitä pitää huomioida taloyhtiön JV-pystylinjojen ja pohjaviemärin sukituksessa?"
-  );
+  await page.getByLabel("Kysy CIPP-/sukitusurakasta").fill("Paljonko yllä kuvatun taloyhtiön urakka maksaa?");
   await page.getByLabel("Show debug packet").check();
   await page.getByRole("button", { name: "Lähetä" }).click();
 
   await expect(page.getByRole("heading", { name: "Vastaus" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Arviossa käytetty case" })).toBeVisible();
+  const caseUsed = page.locator(".case-used");
+  await expect(caseUsed.getByText("Kattokaivot")).toBeVisible();
+  await expect(caseUsed.getByText("6", { exact: true })).toBeVisible();
   await expect(page.getByText("4 SV-pystyviemäriä ja 6 kattokaivoa")).toBeVisible();
   await expect(page.getByText("llm_used=false")).toBeVisible();
   const sourcesPanel = page.getByRole("heading", { name: "Lähteet" }).locator("..");

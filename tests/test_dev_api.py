@@ -100,6 +100,9 @@ def test_app_config_returns_user_case_fields() -> None:
     defaults = body["defaults"]
     assert defaults["sv_verticals_count"] == 4
     assert defaults["roof_drains_count"] == defaults["sv_verticals_count"]
+    labels = {field["label"] for field in body["user_case_fields"]}
+    assert "Videotarkastus" not in labels
+    assert "Yksikköhinnat / lisätyöt" not in labels
 
 
 def test_suggested_questions_returns_core_questions() -> None:
@@ -109,6 +112,9 @@ def test_suggested_questions_returns_core_questions() -> None:
     questions = response.json()["questions"]
     assert any(question["topic_code"] == "payment" for question in questions)
     assert any(question["topic_code"] == "amateur_operator_guidance" for question in questions)
+    labels = {question["label"] for question in questions}
+    assert "Videotarkastus" not in labels
+    assert "Lisätyöt" not in labels
 
 
 def test_answer_endpoint_returns_composer_answer() -> None:

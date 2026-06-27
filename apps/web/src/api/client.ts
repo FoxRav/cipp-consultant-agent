@@ -50,6 +50,10 @@ export type AnswerResponse = {
   warnings: string[];
   generation_mode: string;
   llm_used: boolean;
+  case_used?: Record<string, number | boolean | string | null>;
+  cost_drivers?: string[];
+  missing_information?: string[];
+  estimate_type?: string;
   retrieval_packet?: unknown;
   debug?: unknown;
 };
@@ -247,9 +251,7 @@ function mockAppConfig(): AppConfig {
       { name: "roof_drains_count", label: "Kattokaivot", type: "number", default: 4 },
       { name: "bottom_drain_length_m", label: "Pohjaviemäri m", type: "number", default: 50 },
       { name: "yard_line_length_m", label: "Tonttilinja m", type: "number", default: 30 },
-      { name: "stormwater_line_length_m", label: "Sadevesilinjat m", type: "number", default: 30 },
-      { name: "includes_video_inspection", label: "Videotarkastus", type: "boolean", default: true },
-      { name: "includes_unit_prices", label: "Yksikköhinnat / lisätyöt", type: "boolean", default: true }
+      { name: "stormwater_line_length_m", label: "Sadevesilinjat m", type: "number", default: 30 }
     ],
     topics: mockSuggestedQuestions().map((question) => ({
       topic_code: question.topic_code,
@@ -284,11 +286,6 @@ function mockSuggestedQuestions(): SuggestedQuestion[] {
       question: "Mitä urakkarajoissa pitää huomioida?"
     },
     {
-      topic_code: "video_inspection",
-      label: "Videotarkastus",
-      question: "Mitä videotarkastuksesta ja loppukuvauksesta pitää vaatia?"
-    },
-    {
       topic_code: "amateur_operator_guidance",
       label: "Muistilista",
       question: "Mitä amatööritoimijan pitää ymmärtää ennen kuin taloyhtiö pyytää urakkatarjouksia?"
@@ -298,6 +295,7 @@ function mockSuggestedQuestions(): SuggestedQuestion[] {
 
 async function mockAnswer(question: string, userCase: UserCase, includeDebug: boolean): Promise<AnswerResponse> {
   await new Promise((resolve) => window.setTimeout(resolve, 80));
+  const isCostQuestion = /paljonko|hinta|kustannus|maksaa/i.test(question);
   const response: AnswerResponse = {
     api_status: "ok",
     request_id: "mock-request-001",
@@ -305,11 +303,11 @@ async function mockAnswer(question: string, userCase: UserCase, includeDebug: bo
     question,
     answer_status: "answered",
     short_answer:
-      "Mock-tila muodostaa turvallisen esimerkkivastauksen: tarkista urakan laajuus, maksuerien hyväksyntä, videotarkastus ja puuttuvat kohdetiedot ennen tarjouspyyntöä.",
+      "Mock-tila muodostaa turvallisen esimerkkivastauksen: tarkista urakan laajuus, maksuerien hyväksyntä ja puuttuvat kohdetiedot ennen tarjouspyyntöä.",
     key_points: [
       `Kohteessa on testiarvona ${userCase.apartments_count} asuntoa, ${userCase.jv_verticals_count} JV-pystyviemäriä, ${userCase.sv_verticals_count} SV-pystyviemäriä ja ${userCase.roof_drains_count} kattokaivoa.`,
       "Pohjaviemärin ja tonttilinjan kuuluminen urakkaan kannattaa kirjata erikseen.",
-      "Videotarkastus ja valvojan kommentit kannattaa sitoa vastaanottoon ja takuuajan seurantaan."
+      "Laadunvarmistus ja valvojan kommentit kannattaa sitoa vastaanottoon ja takuuajan seurantaan."
     ],
     source_based_notes: [
       "Mock-lähdekatkelma (reference_001 / rfq / direct_section): laajuus ja laadunvarmistus kuvataan anonymisoidusti.",
@@ -323,7 +321,7 @@ async function mockAnswer(question: string, userCase: UserCase, includeDebug: bo
     recommended_next_questions: [
       "Kuuluuko tonttilinja urakkaan?",
       "Onko sadevesi mukana vain pihalla vai myös kattokaivojen kautta?",
-      "Miten videotarkastuksen hyväksyntä kirjataan vastaanottoon?"
+      "Miten laadunvarmistuksen hyväksyntä kirjataan vastaanottoon?"
     ],
     sources: [
       {
@@ -353,7 +351,17 @@ async function mockAnswer(question: string, userCase: UserCase, includeDebug: bo
     ],
     warnings: [],
     generation_mode: "deterministic_source_grounded_mock",
-    llm_used: false
+    llm_used: false,
+    ...(isCostQuestion
+      ? {
+          case_used: userCase,
+          cost_drivers: [
+            "Asuntojen määrä, pystylinjat ja linjapituudet ovat mock-tilan näkyvät kustannusajurit.",
+            "Euromääräistä arviota ei muodosteta mock-tilassa."
+          ],
+          missing_information: ["urakkarajat", "todelliset linjapituudet", "suunnitelmien taso"]
+        }
+      : {})
   };
   if (includeDebug) {
     response.debug = {

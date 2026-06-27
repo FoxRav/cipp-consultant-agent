@@ -32,6 +32,40 @@ SOURCE_PRIORITY = {
     "topic_text_fallback": 5,
 }
 ANSWER_STATUSES = {"answered", "partial", "insufficient_evidence"}
+CASE_FIELD_LABELS = {
+    "apartments_count": "asuntoa",
+    "buildings_count": "rakennus",
+    "staircases_count": "porrashuonetta",
+    "jv_verticals_count": "JV-pystyviemäriä",
+    "sv_verticals_count": "SV-pystyviemäriä",
+    "roof_drains_count": "kattokaivoa",
+    "bottom_drain_length_m": "pohjaviemäri",
+    "yard_line_length_m": "tonttilinja",
+    "stormwater_line_length_m": "sadevesilinjat",
+}
+COST_CASE_FIELDS = tuple(CASE_FIELD_LABELS)
+COST_MISSING_INFORMATION = (
+    "urakkarajat",
+    "kuuluuko käyttövesi mukaan",
+    "sukitetaanko vain viemärit",
+    "kylpyhuoneiden / lattiakaivojen määrä",
+    "tonttilinjan todellinen pituus",
+    "pohjaviemärin todellinen pituus",
+    "sadevesilinjojen todellinen pituus",
+    "kaivojen määrä",
+    "videotarkastus / laadunvarmistusvaatimukset, jos myöhemmin tarvitaan",
+    "suunnitelmien taso",
+)
+COST_DRIVER_POINTS = (
+    "Asuntojen määrä ohjaa työn toistuvuutta ja asuntohajotusten laajuutta.",
+    "JV-pystyviemärit vaikuttavat linjakohtaiseen työhön ja aikataulutukseen.",
+    "SV-pystyviemärit ja kattokaivot voivat kasvattaa laajuutta, jos sadevesi kerätään katolta sisäisten linjojen kautta.",
+    "Pohjaviemärin pituus vaikuttaa alajuoksun työmäärään ja työmaan järjestelyihin.",
+    "Tonttilinjan pituus ja liittymäkohta pitää rajata erikseen suhteessa kunnan linjaan.",
+    "Sadevesilinjojen pituus ja kaivojen määrä pitää erottaa JV-laajuudesta.",
+    "Rakennusten ja porrashuoneiden määrä vaikuttavat työmaan vaiheistukseen ja asukashaittaan.",
+    "Urakkarajat ratkaisevat, mitä hintaan saa sisällyttää.",
+)
 
 
 @dataclass(frozen=True)
@@ -188,6 +222,15 @@ def compose_answer(
     warnings = [clean_text(warning) for warning in retrieval_packet.get("warnings") or []]
     uncertainties = build_uncertainties(retrieval_packet, sources)
 
+    if "cost_estimate" in topics:
+        return compose_cost_estimate_answer(
+            retrieval_packet,
+            sources=sources,
+            missing_fields=missing_fields,
+            warnings=warnings,
+            uncertainties=uncertainties,
+        )
+
     key_points = build_key_points(topics, sources, max_answer_bullets)
     if any(source["source_class"] == "expert_guidance" for source in sources) and not any(
         "asiantuntijaohjeen perusteella" in point.lower() or "oppaan" in point.lower()
@@ -216,6 +259,74 @@ def compose_answer(
         "llm_used": LLM_USED,
     }
     return answer
+
+
+def compose_cost_estimate_answer(
+    retrieval_packet: dict[str, Any],
+    sources: list[dict[str, Any]],
+    missing_fields: list[str],
+    warnings: list[str],
+    uncertainties: list[str],
+) -> dict[str, Any]:
+    case_used = cost_case_used(retrieval_packet.get("user_case") or {})
+    missing_information = cost_missing_information(case_used)
+    if "Nykyinen aineisto ei sisällä turvallista, anonymisoitua euromääräistä hintalaskentaa." not in uncertainties:
+        uncertainties = [
+            *uncertainties,
+            "Nykyinen aineisto ei sisällä turvallista, anonymisoitua euromääräistä hintalaskentaa.",
+        ]
+    return {
+        "question": clean_text(retrieval_packet.get("question") or ""),
+        "answer_scope": clean_text(retrieval_packet.get("answer_scope") or "general_cipp_user_case"),
+        "answer_status": "insufficient_evidence",
+        "short_answer": (
+            "Nykyinen aineisto ei riitä luotettavaan euromääräiseen arvioon. "
+            "Käytän kuitenkin yläpalkin taloyhtiö-casea kustannusajureiden arviointiin enkä keksi hintaa ilman lähdetukea."
+        ),
+        "key_points": case_used_as_points(case_used),
+        "source_based_notes": build_source_notes(sources, 6),
+        "missing_user_case_fields": [clean_text(field) for field in missing_fields],
+        "missing_information": [clean_text(item) for item in missing_information],
+        "cost_drivers": [clean_text(item) for item in COST_DRIVER_POINTS],
+        "case_used": case_used,
+        "estimate_type": "insufficient_evidence_no_eur_amount",
+        "uncertainties": [clean_text(item) for item in unique_preserve_order(uncertainties)],
+        "recommended_next_questions": [
+            "Mitkä tarkat urakkarajat koskevat JV-, SV-, pohjaviemäri- ja tonttilinjaosuutta?",
+            "Kuuluuko käyttövesi mukaan vai koskeeko kysymys vain viemäreitä?",
+            "Montako kylpyhuonetta, lattiakaivoa ja tarkastettavaa kaivoa kohteessa on?",
+            "Mitkä ovat pohjaviemärin, tonttilinjan ja sadevesilinjojen toteutuneet pituudet?",
+            "Onko laadunvarmistukselle tai loppukuvaukselle erityisiä vaatimuksia?",
+        ],
+        "sources": sources,
+        "warnings": warnings,
+        "generation_mode": GENERATION_MODE,
+        "llm_used": LLM_USED,
+    }
+
+
+def cost_case_used(user_case: dict[str, Any]) -> dict[str, Any]:
+    return {field: user_case.get(field) for field in COST_CASE_FIELDS}
+
+
+def case_used_as_points(case_used: dict[str, Any]) -> list[str]:
+    points: list[str] = ["Tällä hetkellä syötetty case:"]
+    for field in COST_CASE_FIELDS:
+        value = case_used.get(field)
+        label = CASE_FIELD_LABELS[field]
+        if value is None or value == "":
+            points.append(f"{label}: puuttuu")
+        elif field.endswith("_length_m"):
+            points.append(f"{label} {value} m")
+        else:
+            points.append(f"{value} {label}")
+    return [clean_text(point) for point in points]
+
+
+def cost_missing_information(case_used: dict[str, Any]) -> list[str]:
+    missing = list(COST_MISSING_INFORMATION)
+    missing.extend(CASE_FIELD_LABELS[field] for field in COST_CASE_FIELDS if case_used.get(field) in (None, ""))
+    return unique_preserve_order(missing)
 
 
 def determine_answer_status(packet: dict[str, Any], sources: list[dict[str, Any]]) -> str:
@@ -378,11 +489,17 @@ def render_markdown(answer: dict[str, Any]) -> str:
         "## Key points",
         numbered_or_none(answer["key_points"]),
         "",
+        "## Case used",
+        list_or_none(case_used_markdown(answer.get("case_used") or {})),
+        "",
+        "## Cost drivers",
+        list_or_none(answer.get("cost_drivers") or []),
+        "",
         "## What the sources support",
         list_or_none(answer["source_based_notes"]),
         "",
         "## Missing information",
-        list_or_none(answer["missing_user_case_fields"]),
+        list_or_none([*(answer.get("missing_user_case_fields") or []), *(answer.get("missing_information") or [])]),
         "",
         "## Uncertainties",
         list_or_none(answer["uncertainties"]),
@@ -413,6 +530,12 @@ def render_markdown(answer: dict[str, Any]) -> str:
         ]
     )
     return "\n".join(lines)
+
+
+def case_used_markdown(case_used: dict[str, Any]) -> list[str]:
+    if not case_used:
+        return []
+    return case_used_as_points(case_used)[1:]
 
 
 def write_outputs(answer: dict[str, Any], output: Path | None, output_md: Path | None) -> None:
@@ -482,9 +605,16 @@ def main() -> None:
     parser.add_argument("--staircases-count", type=int)
     parser.add_argument("--jv-verticals-count", type=int)
     parser.add_argument("--sv-verticals-count", type=int)
+    parser.add_argument("--roof-drains-count", type=int)
+    parser.add_argument("--bottom-drain-length-m", type=int)
+    parser.add_argument("--yard-line-length-m", type=int)
+    parser.add_argument("--stormwater-line-length-m", type=int)
     parser.add_argument("--includes-bottom-drain", type=parse_bool)
     parser.add_argument("--includes-yard-line", type=parse_bool)
+    parser.add_argument("--includes-stormwater", type=parse_bool)
+    parser.add_argument("--includes-roof-drains", type=parse_bool)
     parser.add_argument("--includes-video-inspection", type=parse_bool)
+    parser.add_argument("--includes-unit-prices", type=parse_bool)
     parser.add_argument("--topic")
     parser.add_argument("--max-sources", type=int, default=8)
     parser.add_argument("--max-answer-bullets", type=int, default=6)

@@ -119,6 +119,14 @@ def test_payment_question_detects_payment_topic() -> None:
     assert "maksuerä" in matches or "maksueristä" not in matches
 
 
+def test_cost_question_detects_cost_estimate_topic_without_payment_topic() -> None:
+    topics, matches = detect_topics("Paljonko yllä kuvatun taloyhtiön urakka maksaa?")
+
+    assert "cost_estimate" in topics
+    assert "payment" not in topics
+    assert any(match in matches for match in ("paljonko yllä kuvatun taloyhtiön urakka maksaa", "hinta"))
+
+
 def test_user_case_parameters_are_stored_in_packet() -> None:
     packet = build_retrieval_packet(
         fixture_repository(),

@@ -29,7 +29,7 @@ http://127.0.0.1:5173
 Mitä maksueristä kannattaa sopia CIPP-sukitusurakassa?
 Mitä pitää huomioida taloyhtiön JV-pystylinjojen ja pohjaviemärin sukituksessa?
 Mitä urakkarajoissa pitää huomioida?
-Mitä videotarkastuksesta ja loppukuvauksesta pitää vaatia?
+Paljonko yllä kuvatun taloyhtiön urakka maksaa?
 Mitä amatööritoimijan pitää ymmärtää ennen kuin taloyhtiö pyytää urakkatarjouksia?
 ```
 
@@ -43,10 +43,10 @@ Mitä amatööritoimijan pitää ymmärtää ennen kuin taloyhtiö pyytää urak
 - pohjaviemärin pituus
 - tonttilinjan pituus
 - sadevesilinjojen pituus
-- videotarkastus kyllä/ei
-- yksikköhinnat kyllä/ei
 
 Oletuksena `SV-pystyviemäreitä = 4` ja `Kattokaivot = 4`. Kattokaivojen oletusarvo johdetaan SV-pystyviemäreiden oletusarvosta, koska kattokaivot liittyvät sadevesipuolen pystylinjoihin. Käyttäjä voi muuttaa kattokaivojen määrää erikseen, jos kohteen todellinen tilanne poikkeaa oletuksesta.
+
+Perusnäkymässä ei näytetä `Videotarkastus`- eikä `Yksikköhinnat / lisätyöt` -kenttiä. Pikakysymysnapeissa ei näytetä `Videotarkastus`- eikä `Lisätyöt`-aiheita.
 
 6. Tarkista jokaisessa vastauksessa:
 
@@ -59,6 +59,14 @@ Oletuksena `SV-pystyviemäreitä = 4` ja `Kattokaivot = 4`. Kattokaivojen oletus
 - ei Windows-polkuja
 - ei oikeita projektinimiä
 - debug toggle toimii
+
+Hintakysymyksessä tarkista lisäksi:
+
+- kysymys `Paljonko yllä kuvatun taloyhtiön urakka maksaa?` tunnistuu kustannusarvioksi
+- vastauskortissa näkyy `Arviossa käytetty case`
+- case-yhteenveto vastaa yläpalkin arvoja
+- jos luotettava lähdeperustainen hintadata ei riitä, vastaus sanoo tämän selvästi eikä keksi euromäärää
+- puuttuvat tiedot ja kustannusajurit näkyvät
 
 ## Mock API -testi
 
@@ -98,7 +106,7 @@ Aja smoke:
 npm run test:smoke
 ```
 
-Smoke käyttää mock API -tilaa URL-parametrilla `?mock=1`. Testi varmistaa, että yläpalkin kentät näkyvät, arvoja voi muuttaa, kysymyksen voi lähettää, vastaus ja lähteet ilmestyvät, debug-näkymä avautuu ja UI:ssa ei näy Windows-polkuja tai luottamuksellisia dokumenttipäätteitä.
+Smoke käyttää mock API -tilaa URL-parametrilla `?mock=1`. Testi varmistaa, että yläpalkin case-parametrit näkyvät, poistetut perusnäkymän kentät ja topic-chipit eivät näy, arvoja voi muuttaa, hintakysymyksen voi lähettää, vastaus ja lähteet ilmestyvät, case-yhteenveto näkyy, debug-näkymä avautuu ja UI:ssa ei näy Windows-polkuja tai luottamuksellisia dokumenttipäätteitä.
 
 ## Failed to fetch -vianetsintä
 

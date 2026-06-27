@@ -18,11 +18,13 @@ def retrieval_packet(
     text_context_count: int = 2,
     missing_text_context_count: int = 0,
     missing_fields: list[str] | None = None,
+    question: str = "Mitä maksueristä kannattaa sopia CIPP-sukitusurakassa?",
+    user_case: dict[str, object] | None = None,
 ) -> dict[str, object]:
     return {
-        "question": "Mitä maksueristä kannattaa sopia CIPP-sukitusurakassa?",
+        "question": question,
         "answer_scope": "general_cipp_user_case",
-        "user_case": {},
+        "user_case": user_case or {},
         "retrieval_status": retrieval_status,
         "evidence_coverage_status": coverage_status,
         "text_context_count": text_context_count,
@@ -216,6 +218,39 @@ def test_composer_does_not_invent_numbers_not_in_packet() -> None:
     assert "70%" not in serialized
     assert "8000" not in serialized
     assert "5000" not in serialized
+
+
+def test_cost_template_uses_user_case_without_inventing_eur_amounts() -> None:
+    answer = compose_answer(
+        retrieval_packet(
+            topics=["cost_estimate"],
+            question="Paljonko yllä kuvatun taloyhtiön urakka maksaa?",
+            user_case={
+                "apartments_count": 30,
+                "buildings_count": 1,
+                "staircases_count": 3,
+                "jv_verticals_count": 15,
+                "sv_verticals_count": 4,
+                "roof_drains_count": 4,
+                "bottom_drain_length_m": 50,
+                "yard_line_length_m": 30,
+                "stormwater_line_length_m": 30,
+            },
+        )
+    )
+    serialized = json.dumps(answer, ensure_ascii=False)
+
+    assert answer["answer_status"] == "insufficient_evidence"
+    assert answer["estimate_type"] == "insufficient_evidence_no_eur_amount"
+    assert answer["case_used"]["apartments_count"] == 30
+    assert answer["case_used"]["roof_drains_count"] == 4
+    assert "Nykyinen aineisto ei riitä luotettavaan euromääräiseen arvioon" in answer["short_answer"]
+    assert "urakkarajat" in answer["missing_information"]
+    assert any("JV-pystyviemärit" in driver for driver in answer["cost_drivers"])
+    assert "8000" not in serialized
+    assert "5000" not in serialized
+    assert "€" not in serialized
+    assert "secret_project" not in serialized
 
 
 def test_tests_use_no_real_confidential_project_data() -> None:

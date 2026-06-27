@@ -277,6 +277,44 @@ button {
   margin-top: 18px;
 }
 
+.case-used {
+  margin-top: 16px;
+  border: 1px solid #d7e2e8;
+  border-radius: 8px;
+  padding: 12px;
+  background: #f8fbfc;
+}
+
+.case-used h3 {
+  margin: 0 0 10px;
+  color: #405768;
+  font-size: 14px;
+}
+
+.case-used dl {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 8px 12px;
+  margin: 0;
+}
+
+.case-used div {
+  min-width: 0;
+}
+
+.case-used dt {
+  color: #657987;
+  font-size: 12px;
+  font-weight: 720;
+}
+
+.case-used dd {
+  margin: 2px 0 0;
+  color: #17202a;
+  font-size: 15px;
+  font-weight: 760;
+}
+
 .list-block h3,
 .info-list h3 {
   margin: 0 0 8px;

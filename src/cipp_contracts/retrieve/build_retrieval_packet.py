@@ -38,13 +38,40 @@ REQUIRED_PACKET_KEYS = (
 
 
 TOPIC_RULES: dict[str, dict[str, Any]] = {
+    "cost_estimate": {
+        "keywords": (
+            "paljonko maksaa",
+            "mitä maksaa",
+            "hinta",
+            "urakan hinta",
+            "urakkahinta",
+            "kustannus",
+            "kustannusarvio",
+            "paljonko tämä taloyhtiö maksaisi",
+            "paljonko yllä kuvattu taloyhtiö maksaa",
+            "paljonko yllä kuvatun taloyhtiön urakka maksaa",
+        ),
+        "entity_types": ("unit_price", "payment_item", "contract", "property", "scope_item", "boundary"),
+        "relation_types": ("CONTAINS", "SUPPORTED_BY", "HAS_CONTRACT", "HAS_DOCUMENT", "DEFINES", "AFFECTS"),
+        "missing_fields": (
+            "apartments_count",
+            "buildings_count",
+            "staircases_count",
+            "jv_verticals_count",
+            "sv_verticals_count",
+            "roof_drains_count",
+            "bottom_drain_length_m",
+            "yard_line_length_m",
+            "stormwater_line_length_m",
+        ),
+    },
     "payment": {
         "keywords": ("maksuerä", "maksuerät", "maksueri", "lasku", "maksuposti", "maksuerätaulukko"),
         "entity_types": ("payment_item", "contract", "document", "section", "clause"),
         "relation_types": ("CONTAINS", "SUPPORTED_BY", "HAS_DOCUMENT", "HAS_SECTION", "HAS_CLAUSE"),
     },
     "finance": {
-        "keywords": ("urakkahinta", "hinta", "kustannus", "€/asunto", "euro", "eur"),
+        "keywords": ("€/asunto", "euro", "eur"),
         "entity_types": ("payment_item", "unit_price", "security", "insurance", "contract", "property"),
         "relation_types": ("CONTAINS", "SUPPORTED_BY", "HAS_CONTRACT", "HAS_DOCUMENT"),
         "missing_fields": ("apartments_count",),
@@ -200,9 +227,16 @@ USER_CASE_FIELDS = (
     "staircases_count",
     "jv_verticals_count",
     "sv_verticals_count",
+    "roof_drains_count",
+    "bottom_drain_length_m",
+    "yard_line_length_m",
+    "stormwater_line_length_m",
     "includes_bottom_drain",
     "includes_yard_line",
+    "includes_stormwater",
+    "includes_roof_drains",
     "includes_video_inspection",
+    "includes_unit_prices",
 )
 DIRECT_TEXT_CONTEXT_STATUSES = {"direct_clause", "direct_section", "direct_page", "source_file_page", "entity_source_fallback"}
 DOMAIN_SOURCE_TABLES = {
@@ -867,7 +901,7 @@ def keywords_for_topics(topics: list[str]) -> list[str]:
 
 
 def missing_user_case_fields(user_case: dict[str, Any], topics: list[str]) -> list[str]:
-    required = {"apartments_count"} if any(topic in topics for topic in ("finance", "payment")) else set()
+    required = {"apartments_count"} if any(topic in topics for topic in ("cost_estimate", "finance", "payment")) else set()
     for topic in topics:
         required.update(TOPIC_RULES.get(topic, {}).get("missing_fields", ()))
     if "wastewater_sewer" in topics:
@@ -1350,9 +1384,16 @@ def main() -> None:
     parser.add_argument("--staircases-count", type=int)
     parser.add_argument("--jv-verticals-count", type=int)
     parser.add_argument("--sv-verticals-count", type=int)
+    parser.add_argument("--roof-drains-count", type=int)
+    parser.add_argument("--bottom-drain-length-m", type=int)
+    parser.add_argument("--yard-line-length-m", type=int)
+    parser.add_argument("--stormwater-line-length-m", type=int)
     parser.add_argument("--includes-bottom-drain", type=parse_bool)
     parser.add_argument("--includes-yard-line", type=parse_bool)
+    parser.add_argument("--includes-stormwater", type=parse_bool)
+    parser.add_argument("--includes-roof-drains", type=parse_bool)
     parser.add_argument("--includes-video-inspection", type=parse_bool)
+    parser.add_argument("--includes-unit-prices", type=parse_bool)
     parser.add_argument("--topic")
     parser.add_argument("--limit-entities", type=int, default=10)
     parser.add_argument("--limit-relations", type=int, default=25)

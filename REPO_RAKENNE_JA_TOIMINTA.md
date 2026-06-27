@@ -1237,9 +1237,9 @@ Frontendin pääosat:
 - `apps/web/src/auth/mockAuthAdapter.ts`: paikallinen mock login/register/logout -toteutus ilman verkkoa.
 - `apps/web/src/auth/supabaseAuthAdapter.ts`: Supabase-adapterin suunniteltu stub, joka ei vielä kytke oikeaa Supabase-clienttiä.
 - `apps/web/src/components/AuthPanel.tsx`: login/register/logout-prototyyppi ja session-kontekstin näyttö.
-- `apps/web/src/components/TopCaseBar.tsx`: taloyhtiön perustiedot ja toggle-parametrit.
+- `apps/web/src/components/TopCaseBar.tsx`: taloyhtiön perustiedot ja näkyvät numeric-case-parametrit.
 - `apps/web/src/components/QuestionPanel.tsx`: keskustelumainen kysymyskenttä ja debug-toggle.
-- `apps/web/src/components/AnswerCard.tsx`: lyhyt vastaus, key points, lähteisiin perustuvat huomiot ja jatkokysymykset.
+- `apps/web/src/components/AnswerCard.tsx`: lyhyt vastaus, key points, hintakysymyksen case-yhteenveto, lähteisiin perustuvat huomiot ja jatkokysymykset.
 - `apps/web/src/components/SourcesPanel.tsx`: anonymisoidut lähteet ja sanitisoidut katkelmat.
 - `apps/web/src/components/UncertaintyPanel.tsx`: puuttuvat käyttäjätiedot, epävarmuudet ja varoitukset.
 - `apps/web/src/components/StatusBadges.tsx`: `answered/partial/insufficient_evidence`, `llm_used=false`, `source_grounded` ja `expert_guidance`.
@@ -1250,9 +1250,11 @@ Frontendin pääosat:
 - `docs/supabase_auth_plan.md`: Supabase-authin rajaus, adapteripäätös ja seuraavat turvalliset askeleet.
 - `scripts/run_frontend_dev.ps1`: tulostaa paikallisen backend/frontend-käynnistysohjeen.
 
-Yläpalkin parametrit lähetetään aina API:iin `user_case`-osiossa. Tällä testataan nopeasti, miten esimerkiksi asuntojen määrä, JV-pystylinjat, SV-pystylinjat, kattokaivojen määrä, pohjaviemärin pituus, tonttilinjan pituus, sadevesilinjojen pituus, videotarkastus ja yksikköhinnat vaikuttavat puuttuviin tietoihin, epävarmuuksiin ja retrievalin painotukseen.
+Yläpalkin parametrit lähetetään aina API:iin `user_case`-osiossa. Perusnäkymässä näkyvät vain asuntojen määrä, rakennukset, porrashuoneet, JV-pystylinjat, SV-pystylinjat, kattokaivot, pohjaviemärin pituus, tonttilinjan pituus ja sadevesilinjojen pituus. `Videotarkastus` ja `Yksikköhinnat / lisätyöt` on poistettu aloitusnäkymästä ja pikakysymysnapeista, jotta peruscase pysyy selkeänä.
 
 Frontendin oletusarvoissa `sv_verticals_count=4` ja `roof_drains_count=4`. Kattokaivojen oletusarvo johdetaan SV-pystyviemäreiden oletusarvosta, koska kattokaivot liittyvät sadevesipuolen pystylinjoihin. Tämä on vain oletus: käyttäjä voi muuttaa kattokaivojen määrää erikseen, jos kohteessa kattokaivojen ja SV-pystyviemäreiden määrät eivät vastaa toisiaan. Reset defaults palauttaa molemmat takaisin arvoon 4.
+
+Hintakysymykset kuten `Paljonko yllä kuvatun taloyhtiön urakka maksaa?` tunnistetaan `cost_estimate`-topiciksi erillään maksueristä. Composer käyttää silloin yläpalkin nykyistä casea, palauttaa `case_used`-kentän ja näyttää kustannusajurit. Jos retrieval-paketissa ei ole riittävää anonymisoitua hintadataa, vastaus on `insufficient_evidence`: se ei keksi euromäärää, vaan listaa puuttuvat tiedot kuten urakkarajat, käyttöveden kuulumisen, kylpyhuoneiden/lattiakaivojen määrän, todelliset linjapituudet, kaivojen määrän, laadunvarmistusvaatimukset ja suunnitelmien tason.
 
 Tärkeä rajaus: frontend näyttää vastauksen, jonka source-grounded composer muodostaa. Se ei kutsu LLM:ää eikä saa näyttää referenssiprojektien oikeita nimiä tai raakaa tiedostopolkuja.
 

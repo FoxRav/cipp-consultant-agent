@@ -54,11 +54,6 @@ QUESTION_SUGGESTIONS = [
         question="Mitä urakkarajoissa pitää huomioida ja miten määritellään mikä kuuluu urakkaan?",
     ),
     SuggestedQuestion(
-        topic_code="video_inspection",
-        label="Videotarkastus",
-        question="Mitä videotarkastuksesta ja loppukuvauksesta pitää vaatia CIPP-urakassa?",
-    ),
-    SuggestedQuestion(
         topic_code="handover",
         label="Vastaanotto",
         question="Mitä vastaanotossa pitää tarkistaa ennen CIPP-urakan hyväksymistä?",
@@ -72,11 +67,6 @@ QUESTION_SUGGESTIONS = [
         topic_code="security_insurance",
         label="Vakuudet",
         question="Mitä vakuuksia ja vakuutuksia CIPP-urakassa pitää huomioida?",
-    ),
-    SuggestedQuestion(
-        topic_code="unit_prices_change_work",
-        label="Lisätyöt",
-        question="Miten lisätyöt ja yksikköhinnat kannattaa määritellä sukitusurakassa?",
     ),
     SuggestedQuestion(
         topic_code="defects_claims",
@@ -110,8 +100,6 @@ USER_CASE_FIELD_CONFIG = [
     {"name": "bottom_drain_length_m", "label": "Pohjaviemäri m", "type": "number", "default": 50},
     {"name": "yard_line_length_m", "label": "Tonttilinja m", "type": "number", "default": 30},
     {"name": "stormwater_line_length_m", "label": "Sadevesilinjat m", "type": "number", "default": 30},
-    {"name": "includes_video_inspection", "label": "Videotarkastus", "type": "boolean", "default": True},
-    {"name": "includes_unit_prices", "label": "Yksikköhinnat / lisätyöt", "type": "boolean", "default": True},
 ]
 
 UI_LABELS = {

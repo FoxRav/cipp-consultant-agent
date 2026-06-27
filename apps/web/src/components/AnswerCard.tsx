@@ -27,10 +27,43 @@ export function AnswerCard({ answer, loading }: Props) {
       </div>
       <h2>Vastaus</h2>
       <p className="short-answer">{answer.short_answer}</p>
+      <CaseUsed caseUsed={answer.case_used} />
       <ListBlock title="Keskeiset huomiot" values={answer.key_points} ordered />
+      <ListBlock title="Kustannusajurit" values={answer.cost_drivers ?? []} />
+      <ListBlock title="Puuttuvat tiedot" values={answer.missing_information ?? []} />
       <ListBlock title="Lähteiden tukemat muistiinpanot" values={answer.source_based_notes} />
       <ListBlock title="Seuraavat tarkentavat kysymykset" values={answer.recommended_next_questions} />
     </section>
+  );
+}
+
+function CaseUsed({ caseUsed }: { caseUsed?: Record<string, number | boolean | string | null> }) {
+  if (!caseUsed) {
+    return null;
+  }
+  const items: Array<[string, number | boolean | string | null | undefined]> = [
+    ["Asuntoja", caseUsed.apartments_count],
+    ["Rakennuksia", caseUsed.buildings_count],
+    ["Porrashuoneita", caseUsed.staircases_count],
+    ["JV-pystyviemäreitä", caseUsed.jv_verticals_count],
+    ["SV-pystyviemäreitä", caseUsed.sv_verticals_count],
+    ["Kattokaivot", caseUsed.roof_drains_count],
+    ["Pohjaviemäri m", caseUsed.bottom_drain_length_m],
+    ["Tonttilinja m", caseUsed.yard_line_length_m],
+    ["Sadevesilinjat m", caseUsed.stormwater_line_length_m]
+  ];
+  return (
+    <div className="case-used">
+      <h3>Arviossa käytetty case</h3>
+      <dl>
+        {items.map(([label, value]) => (
+          <div key={label}>
+            <dt>{label}</dt>
+            <dd>{value ?? "puuttuu"}</dd>
+          </div>
+        ))}
+      </dl>
+    </div>
   );
 }
 
