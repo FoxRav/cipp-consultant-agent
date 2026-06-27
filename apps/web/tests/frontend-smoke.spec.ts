@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 
 test("frontend playground works with mock API", async ({ page }) => {
-  await page.goto("/?mock=1");
+  await page.goto("/?mock=1&resetCase=1");
 
   await expect(page.getByRole("heading", { name: "CIPP Consultant Agent" })).toBeVisible();
   await expect(page.getByText("api: ok")).toBeVisible();
@@ -27,18 +27,9 @@ test("frontend playground works with mock API", async ({ page }) => {
   for (const label of expectedFields) {
     await expect(caseBar.getByText(label, { exact: true })).toBeVisible();
   }
-  await expect(caseBar.getByText("Videotarkastus", { exact: true })).not.toBeVisible();
-  await expect(caseBar.getByText("Yksikköhinnat / lisätyöt", { exact: true })).not.toBeVisible();
-  await expect(page.getByRole("button", { name: "Videotarkastus" })).not.toBeVisible();
-  await expect(page.getByRole("button", { name: "Lisätyöt" })).not.toBeVisible();
+  await expectRemovedControls(page);
 
-  await expect(page.getByLabel("Asuntoja")).toHaveValue("30");
-  await expect(page.getByLabel("Rakennuksia")).toHaveValue("1");
-  await expect(page.getByLabel("Porrashuoneita")).toHaveValue("3");
-  await expect(page.getByLabel("JV-pystyviemäreitä")).toHaveValue("15");
-  await expect(page.getByLabel("Pohjaviemäri m")).toHaveValue("50");
-  await expect(page.getByLabel("Tonttilinja m")).toHaveValue("30");
-  await expect(page.getByLabel("Sadevesilinjat m")).toHaveValue("30");
+  await expectDefaultCase(page);
 
   const apartments = page.getByLabel("Asuntoja");
   await apartments.fill("42");
@@ -57,8 +48,7 @@ test("frontend playground works with mock API", async ({ page }) => {
   await expect(roofDrains).toHaveValue("6");
 
   await page.getByRole("button", { name: "Reset defaults" }).click();
-  await expect(svVerticals).toHaveValue("4");
-  await expect(roofDrains).toHaveValue("4");
+  await expectDefaultCase(page);
 
   await apartments.fill("42");
   await jvVerticals.fill("11");
@@ -79,7 +69,6 @@ test("frontend playground works with mock API", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Lähteet" })).toBeVisible();
   await expect(sourcesPanel.getByText("reference_001", { exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { level: 2, name: "Epävarmuudet" })).toBeVisible();
-  await expect(page.locator("li").filter({ hasText: "includes_yard_line" })).toBeVisible();
 
   await expect(page.locator(".debug-panel summary")).toHaveText("Show debug packet");
   await page.locator(".debug-panel summary").click();
@@ -96,6 +85,27 @@ test("frontend playground works with mock API", async ({ page }) => {
 
   await page.getByRole("button", { name: "Logout" }).click();
   await expect(page.getByRole("button", { name: "Login" })).toBeVisible();
+});
+
+test("frontend resets stale localStorage case state", async ({ page }) => {
+  await page.addInitScript(() => {
+    window.localStorage.setItem("cipp_user_case_schema_version", "1");
+    window.localStorage.setItem(
+      "cipp_user_case",
+      JSON.stringify({
+        sv_verticals_count: 0,
+        roof_drains_count: 0,
+        stormwater_line_length_m: 0,
+        includes_video_inspection: true,
+        includes_unit_prices: true
+      })
+    );
+  });
+
+  await page.goto("/?mock=1");
+
+  await expectDefaultCase(page);
+  await expectRemovedControls(page);
 });
 
 test("frontend shows actionable diagnostics when API is offline", async ({ page }) => {
@@ -118,3 +128,21 @@ test("frontend shows actionable diagnostics when API is offline", async ({ page 
   expect(bodyText).not.toContain("TypeError");
   expect(bodyText).not.toContain("Traceback");
 });
+
+async function expectDefaultCase(page: import("@playwright/test").Page) {
+  await expect(page.getByLabel("Asuntoja")).toHaveValue("30");
+  await expect(page.getByLabel("Rakennuksia")).toHaveValue("1");
+  await expect(page.getByLabel("Porrashuoneita")).toHaveValue("3");
+  await expect(page.getByLabel("JV-pystyviemäreitä")).toHaveValue("15");
+  await expect(page.getByLabel("SV-pystyviemäreitä")).toHaveValue("4");
+  await expect(page.getByLabel("Kattokaivot")).toHaveValue("4");
+  await expect(page.getByLabel("Pohjaviemäri m")).toHaveValue("50");
+  await expect(page.getByLabel("Tonttilinja m")).toHaveValue("30");
+  await expect(page.getByLabel("Sadevesilinjat m")).toHaveValue("30");
+}
+
+async function expectRemovedControls(page: import("@playwright/test").Page) {
+  await expect(page.getByText("Videotarkastus")).toHaveCount(0);
+  await expect(page.getByText("Yksikköhinnat / lisätyöt")).toHaveCount(0);
+  await expect(page.getByText("Lisätyöt")).toHaveCount(0);
+}

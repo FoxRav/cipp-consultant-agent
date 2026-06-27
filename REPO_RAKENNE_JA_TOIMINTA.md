@@ -1233,6 +1233,7 @@ Frontendin pääosat:
 
 - `apps/web/src/App.tsx`: kokoaa playgroundin tilan, kyselyn ja vastauksen.
 - `apps/web/src/api/client.ts`: kutsuu `/api/app-config`, `/api/suggested-questions` ja `/api/answer`.
+- `apps/web/src/config/defaultCase.ts`: keskitetty frontendin default-case, näkyvä kenttälista, localStorage schema-versio ja `?resetCase=1`-resetointi.
 - `apps/web/src/auth/authAdapter.ts`: valitsee auth-providerin `VITE_AUTH_PROVIDER`-asetuksesta.
 - `apps/web/src/auth/mockAuthAdapter.ts`: paikallinen mock login/register/logout -toteutus ilman verkkoa.
 - `apps/web/src/auth/supabaseAuthAdapter.ts`: Supabase-adapterin suunniteltu stub, joka ei vielä kytke oikeaa Supabase-clienttiä.
@@ -1252,7 +1253,9 @@ Frontendin pääosat:
 
 Yläpalkin parametrit lähetetään aina API:iin `user_case`-osiossa. Perusnäkymässä näkyvät vain asuntojen määrä, rakennukset, porrashuoneet, JV-pystylinjat, SV-pystylinjat, kattokaivot, pohjaviemärin pituus, tonttilinjan pituus ja sadevesilinjojen pituus. `Videotarkastus` ja `Yksikköhinnat / lisätyöt` on poistettu aloitusnäkymästä ja pikakysymysnapeista, jotta peruscase pysyy selkeänä.
 
-Frontendin oletusarvoissa `sv_verticals_count=4` ja `roof_drains_count=4`. Kattokaivojen oletusarvo johdetaan SV-pystyviemäreiden oletusarvosta, koska kattokaivot liittyvät sadevesipuolen pystylinjoihin. Tämä on vain oletus: käyttäjä voi muuttaa kattokaivojen määrää erikseen, jos kohteessa kattokaivojen ja SV-pystyviemäreiden määrät eivät vastaa toisiaan. Reset defaults palauttaa molemmat takaisin arvoon 4.
+Frontendin oletuscase on `apartments_count=30`, `buildings_count=1`, `staircases_count=3`, `jv_verticals_count=15`, `sv_verticals_count=4`, `roof_drains_count=4`, `bottom_drain_length_m=50`, `yard_line_length_m=30` ja `stormwater_line_length_m=30`. Kattokaivojen oletusarvo johdetaan SV-pystyviemäreiden oletusarvosta, koska kattokaivot liittyvät sadevesipuolen pystylinjoihin. Tämä on vain oletus: käyttäjä voi muuttaa kattokaivojen määrää erikseen, jos kohteessa kattokaivojen ja SV-pystyviemäreiden määrät eivät vastaa toisiaan. Reset defaults palauttaa nämä täsmälleen keskitettyyn default-caseen.
+
+Selain tallentaa case-tilan versionoidusti localStorageen. Jos `cipp_user_case_schema_version` puuttuu tai ei vastaa `CASE_SCHEMA_VERSION=2` -arvoa, vanha case-state poistetaan ja defaultit palautetaan. Manuaalitestissä `http://127.0.0.1:5173/?resetCase=1` pakottaa saman nollauksen heti.
 
 Hintakysymykset kuten `Paljonko yllä kuvatun taloyhtiön urakka maksaa?` tunnistetaan `cost_estimate`-topiciksi erillään maksueristä. Composer käyttää silloin yläpalkin nykyistä casea, palauttaa `case_used`-kentän ja näyttää kustannusajurit. Jos retrieval-paketissa ei ole riittävää anonymisoitua hintadataa, vastaus on `insufficient_evidence`: se ei keksi euromäärää, vaan listaa puuttuvat tiedot kuten urakkarajat, käyttöveden kuulumisen, kylpyhuoneiden/lattiakaivojen määrän, todelliset linjapituudet, kaivojen määrän, laadunvarmistusvaatimukset ja suunnitelmien tason.
 

@@ -96,13 +96,27 @@ def test_app_config_returns_user_case_fields() -> None:
     body = response.json()
     assert body["environment"] == "local_dev"
     assert body["llm_enabled"] is False
-    assert any(field["name"] == "apartments_count" for field in body["user_case_fields"])
+    field_names = [field["name"] for field in body["user_case_fields"]]
+    assert field_names == [
+        "apartments_count",
+        "buildings_count",
+        "staircases_count",
+        "jv_verticals_count",
+        "sv_verticals_count",
+        "roof_drains_count",
+        "bottom_drain_length_m",
+        "yard_line_length_m",
+        "stormwater_line_length_m",
+    ]
     defaults = body["defaults"]
     assert defaults["sv_verticals_count"] == 4
     assert defaults["roof_drains_count"] == defaults["sv_verticals_count"]
+    assert defaults["stormwater_line_length_m"] == 30
     labels = {field["label"] for field in body["user_case_fields"]}
     assert "Videotarkastus" not in labels
     assert "Yksikköhinnat / lisätyöt" not in labels
+    assert "includes_video_inspection" not in field_names
+    assert "includes_unit_prices" not in field_names
 
 
 def test_suggested_questions_returns_core_questions() -> None:

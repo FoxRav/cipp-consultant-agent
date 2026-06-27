@@ -308,6 +308,14 @@ Yläpalkin parametrit lähetetään jokaisen kysymyksen mukana `user_case`-osios
 
 Frontendin oletuscase on: `apartments_count=30`, `buildings_count=1`, `staircases_count=3`, `jv_verticals_count=15`, `sv_verticals_count=4`, `roof_drains_count=4`, `bottom_drain_length_m=50`, `yard_line_length_m=30` ja `stormwater_line_length_m=30`. Kattokaivojen oletusarvo johdetaan SV-pystyviemäreiden oletusarvosta, eli oletuksena molemmat ovat 4. Käyttäjä voi silti muuttaa `roof_drains_count`-arvoa erikseen, jos kohteessa kattokaivojen määrä poikkeaa SV-pystyviemäreiden määrästä.
 
+Frontendin default-case on keskitetty tiedostoon `apps/web/src/config/defaultCase.ts`. Selain tallentaa case-arvot versionoidusti localStorageen avaimilla `cipp_user_case` ja `cipp_user_case_schema_version`. Jos selaimessa näkyy vanhoja nolla-arvoja tai poistettuja kenttiä, avaa testinäkymä reset-parametrilla:
+
+```text
+http://127.0.0.1:5173/?resetCase=1
+```
+
+Mock-testissä sama onnistuu osoitteella `http://127.0.0.1:5173/?mock=1&resetCase=1`.
+
 Hintakysymykset kuten `Paljonko yllä kuvatun taloyhtiön urakka maksaa?` tunnistetaan `cost_estimate`-intentiksi. Composer käyttää silloin yläpalkin nykyisiä `user_case`-arvoja, näyttää vastauskortissa `Arviossa käytetty case` -osion ja listaa kustannusajurit. Euromääräistä arviota ei anneta, ellei retrieval-paketissa ole riittävää, anonymisoitua ja lähdeperustaista hintadataa; muuten vastaus kertoo selvästi, että nykyinen aineisto ei riitä luotettavaan euromäärään, ja listaa puuttuvat tiedot.
 
 Referenssiprojektit pysyvät sisäisenä anonymisoituna grounding-aineistona. UI näyttää lähteet `reference_001`-tyyppisinä viitteinä eikä näytä raakadatahakemistoja, luottamuksellisia tiedostonimiä tai oikeita projektinimiä. Debug-paketti on oletuksena pois päältä ja sekin kulkee API:n sanitoinnin läpi.

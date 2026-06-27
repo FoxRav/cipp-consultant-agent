@@ -1,20 +1,11 @@
-export type UserCase = {
-  apartments_count: number;
-  buildings_count: number;
-  staircases_count: number;
-  jv_verticals_count: number;
-  sv_verticals_count: number;
-  roof_drains_count: number;
-  bottom_drain_length_m: number;
-  yard_line_length_m: number;
-  stormwater_line_length_m: number;
-  includes_bottom_drain: boolean;
-  includes_yard_line: boolean;
-  includes_stormwater: boolean;
-  includes_roof_drains: boolean;
-  includes_video_inspection: boolean;
-  includes_unit_prices: boolean;
-};
+import {
+  DEFAULT_USER_CASE,
+  USER_CASE_FIELDS,
+  type UserCase,
+  type UserCaseFieldConfig
+} from "../config/defaultCase";
+
+export type { UserCase } from "../config/defaultCase";
 
 export type SuggestedQuestion = {
   topic_code: string;
@@ -86,12 +77,7 @@ export class ApiClientError extends Error {
 export type AppConfig = {
   environment: string;
   llm_enabled: boolean;
-  user_case_fields: Array<{
-    name: keyof UserCase;
-    label: string;
-    type: "number" | "boolean";
-    default: number | boolean;
-  }>;
+  user_case_fields: UserCaseFieldConfig[];
   defaults: UserCase;
   topics: Array<{ topic_code: string; label: string }>;
   ui_labels: Record<string, string>;
@@ -129,7 +115,7 @@ export async function getSuggestedQuestions(): Promise<SuggestedQuestion[]> {
     return mockSuggestedQuestions();
   }
   const body = await apiFetchJson<{ questions: SuggestedQuestion[] }>("/api/suggested-questions", { method: "GET" });
-  return body.questions;
+  return visibleSuggestedQuestions(body.questions);
 }
 
 export async function postAnswer(
@@ -225,34 +211,8 @@ function mockAppConfig(): AppConfig {
   return {
     environment: "local_dev_mock",
     llm_enabled: false,
-    defaults: {
-      apartments_count: 30,
-      buildings_count: 1,
-      staircases_count: 3,
-      jv_verticals_count: 15,
-      sv_verticals_count: 4,
-      roof_drains_count: 4,
-      bottom_drain_length_m: 50,
-      yard_line_length_m: 30,
-      stormwater_line_length_m: 30,
-      includes_bottom_drain: true,
-      includes_yard_line: false,
-      includes_stormwater: false,
-      includes_roof_drains: false,
-      includes_video_inspection: true,
-      includes_unit_prices: true
-    },
-    user_case_fields: [
-      { name: "apartments_count", label: "Asuntoja", type: "number", default: 30 },
-      { name: "buildings_count", label: "Rakennuksia", type: "number", default: 1 },
-      { name: "staircases_count", label: "Porrashuoneita", type: "number", default: 3 },
-      { name: "jv_verticals_count", label: "JV-pystyviemäreitä", type: "number", default: 15 },
-      { name: "sv_verticals_count", label: "SV-pystyviemäreitä", type: "number", default: 4 },
-      { name: "roof_drains_count", label: "Kattokaivot", type: "number", default: 4 },
-      { name: "bottom_drain_length_m", label: "Pohjaviemäri m", type: "number", default: 50 },
-      { name: "yard_line_length_m", label: "Tonttilinja m", type: "number", default: 30 },
-      { name: "stormwater_line_length_m", label: "Sadevesilinjat m", type: "number", default: 30 }
-    ],
+    defaults: { ...DEFAULT_USER_CASE },
+    user_case_fields: USER_CASE_FIELDS,
     topics: mockSuggestedQuestions().map((question) => ({
       topic_code: question.topic_code,
       label: question.label
@@ -269,7 +229,7 @@ function mockAppConfig(): AppConfig {
 }
 
 function mockSuggestedQuestions(): SuggestedQuestion[] {
-  return [
+  return visibleSuggestedQuestions([
     {
       topic_code: "payment",
       label: "Maksuerät",
@@ -290,7 +250,27 @@ function mockSuggestedQuestions(): SuggestedQuestion[] {
       label: "Muistilista",
       question: "Mitä amatööritoimijan pitää ymmärtää ennen kuin taloyhtiö pyytää urakkatarjouksia?"
     }
+  ]);
+}
+
+function visibleSuggestedQuestions(questions: SuggestedQuestion[]): SuggestedQuestion[] {
+  const blockedLabelParts = [
+    ["video", "tarkastus"],
+    ["lisä", "työt"]
   ];
+  const blockedCodeParts = [
+    ["video", "inspection"],
+    ["unit", "prices"],
+    ["change", "work"]
+  ];
+  return questions.filter((question) => {
+    const label = question.label.toLowerCase();
+    const code = question.topic_code.toLowerCase();
+    return !(
+      blockedLabelParts.some((parts) => parts.every((part) => label.includes(part))) ||
+      blockedCodeParts.some((parts) => parts.every((part) => code.includes(part)))
+    );
+  });
 }
 
 async function mockAnswer(question: string, userCase: UserCase, includeDebug: boolean): Promise<AnswerResponse> {
@@ -313,7 +293,7 @@ async function mockAnswer(question: string, userCase: UserCase, includeDebug: bo
       "Mock-lähdekatkelma (reference_001 / rfq / direct_section): laajuus ja laadunvarmistus kuvataan anonymisoidusti.",
       "Mock-lähdekatkelma (reference_002 / expert_guidance / direct_section): asiantuntijaohje tukee hallituksen valmistelun tarkistuslistaa."
     ],
-    missing_user_case_fields: userCase.includes_yard_line ? [] : ["includes_yard_line"],
+    missing_user_case_fields: [],
     uncertainties: [
       "Tarkka kohdekohtainen tulkinta edellyttää tarjouspyynnön ja sopimusasiakirjojen varmistusta.",
       "Mock-tila ei käytä tietokantaa eikä korvaa live API -testausta."

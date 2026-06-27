@@ -16,18 +16,6 @@ export function TopCaseBar({ fields, userCase, onChange, onReset }: Props) {
     <section className="case-bar" aria-label="Taloyhtiön perustiedot">
       {fields.map((field) => {
         const value = userCase[field.name];
-        if (field.type === "boolean") {
-          return (
-            <label className="toggle-field" key={field.name}>
-              <span>{field.label}</span>
-              <input
-                type="checkbox"
-                checked={Boolean(value)}
-                onChange={(event) => onChange({ ...userCase, [field.name]: event.target.checked })}
-              />
-            </label>
-          );
-        }
         return (
           <label className="number-field" key={field.name}>
             <span>{field.label}</span>

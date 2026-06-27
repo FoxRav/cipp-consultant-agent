@@ -20,8 +20,10 @@ npm run dev
 3. Avaa selain:
 
 ```text
-http://127.0.0.1:5173
+http://127.0.0.1:5173/?resetCase=1
 ```
+
+`?resetCase=1` tyhjentää vanhan `cipp_user_case`-localStorage-tilan ja pakottaa oikean oletuscasen. Käytä sitä aina, jos selaimessa näkyy vanhoja nolla-arvoja tai poistettuja kenttiä.
 
 4. Testaa kysymykset:
 
@@ -45,6 +47,8 @@ Mitä amatööritoimijan pitää ymmärtää ennen kuin taloyhtiö pyytää urak
 - sadevesilinjojen pituus
 
 Oletuksena `SV-pystyviemäreitä = 4` ja `Kattokaivot = 4`. Kattokaivojen oletusarvo johdetaan SV-pystyviemäreiden oletusarvosta, koska kattokaivot liittyvät sadevesipuolen pystylinjoihin. Käyttäjä voi muuttaa kattokaivojen määrää erikseen, jos kohteen todellinen tilanne poikkeaa oletuksesta.
+
+Koko oletuscase on: `Asuntoja=30`, `Rakennuksia=1`, `Porrashuoneita=3`, `JV-pystyviemäreitä=15`, `SV-pystyviemäreitä=4`, `Kattokaivot=4`, `Pohjaviemäri m=50`, `Tonttilinja m=30` ja `Sadevesilinjat m=30`.
 
 Perusnäkymässä ei näytetä `Videotarkastus`- eikä `Yksikköhinnat / lisätyöt` -kenttiä. Pikakysymysnapeissa ei näytetä `Videotarkastus`- eikä `Lisätyöt`-aiheita.
 
@@ -80,7 +84,7 @@ npm run dev
 Avaa:
 
 ```text
-http://127.0.0.1:5173/?mock=1
+http://127.0.0.1:5173/?mock=1&resetCase=1
 ```
 
 Vaihtoehtoisesti aseta paikalliseen frontend-env-tiedostoon:
@@ -106,7 +110,9 @@ Aja smoke:
 npm run test:smoke
 ```
 
-Smoke käyttää mock API -tilaa URL-parametrilla `?mock=1`. Testi varmistaa, että yläpalkin case-parametrit näkyvät, poistetut perusnäkymän kentät ja topic-chipit eivät näy, arvoja voi muuttaa, hintakysymyksen voi lähettää, vastaus ja lähteet ilmestyvät, case-yhteenveto näkyy, debug-näkymä avautuu ja UI:ssa ei näy Windows-polkuja tai luottamuksellisia dokumenttipäätteitä.
+Smoke käyttää mock API -tilaa URL-parametrilla `?mock=1&resetCase=1`. Testi varmistaa, että yläpalkin case-parametrit näkyvät, poistetut perusnäkymän kentät ja topic-chipit eivät näy, arvoja voi muuttaa, reset palauttaa keskitetyn default-casen, hintakysymyksen voi lähettää, vastaus ja lähteet ilmestyvät, case-yhteenveto näkyy, debug-näkymä avautuu ja UI:ssa ei näy Windows-polkuja tai luottamuksellisia dokumenttipäätteitä.
+
+Smoke sisältää myös vanhan localStorage-tilan regression: jos selaimessa on vanha `cipp_user_case`, jossa SV-pystyviemärit, kattokaivot tai sadevesilinjat ovat nollia, schema-version mismatch poistaa vanhan tilan ja palauttaa arvot `4`, `4` ja `30`.
 
 ## Failed to fetch -vianetsintä
 

@@ -22,29 +22,18 @@ import { StatusBadges } from "./components/StatusBadges";
 import { SuggestedQuestions } from "./components/SuggestedQuestions";
 import { TopCaseBar } from "./components/TopCaseBar";
 import { UncertaintyPanel } from "./components/UncertaintyPanel";
-
-const fallbackDefaults: UserCase = {
-  apartments_count: 30,
-  buildings_count: 1,
-  staircases_count: 3,
-  jv_verticals_count: 15,
-  sv_verticals_count: 4,
-  roof_drains_count: 4,
-  bottom_drain_length_m: 50,
-  yard_line_length_m: 30,
-  stormwater_line_length_m: 30,
-  includes_bottom_drain: true,
-  includes_yard_line: false,
-  includes_stormwater: false,
-  includes_roof_drains: false,
-  includes_video_inspection: true,
-  includes_unit_prices: true
-};
+import {
+  DEFAULT_USER_CASE,
+  loadInitialUserCase,
+  normalizeUserCase,
+  persistUserCase,
+  visibleUserCaseFields
+} from "./config/defaultCase";
 
 export default function App() {
   const [config, setConfig] = useState<AppConfig | null>(null);
   const [suggestions, setSuggestions] = useState<SuggestedQuestion[]>([]);
-  const [userCase, setUserCase] = useState<UserCase>(fallbackDefaults);
+  const [userCase, setUserCaseState] = useState<UserCase>(() => loadInitialUserCase());
   const [question, setQuestion] = useState("Mitä maksueristä kannattaa sopia CIPP-sukitusurakassa?");
   const [showDebug, setShowDebug] = useState(false);
   const [answer, setAnswer] = useState<AnswerResponse | null>(null);
@@ -64,7 +53,7 @@ export default function App() {
     void Promise.all([getAppConfig(), getSuggestedQuestions()])
       .then(([appConfig, fetchedSuggestions]) => {
         setConfig(appConfig);
-        setUserCase({ ...fallbackDefaults, ...appConfig.defaults });
+        setUserCase(normalizeUserCase({ ...DEFAULT_USER_CASE, ...appConfig.defaults, ...loadInitialUserCase() }));
         setSuggestions(fetchedSuggestions);
       })
       .catch((err: unknown) => {
@@ -77,8 +66,14 @@ export default function App() {
     void authAdapter.getSession().then(setSession).catch(() => setSession(null));
   }, [authAdapter]);
 
-  const fields = useMemo(() => config?.user_case_fields ?? [], [config]);
-  const defaults = useMemo(() => ({ ...fallbackDefaults, ...(config?.defaults ?? {}) }), [config]);
+  const fields = useMemo(() => visibleUserCaseFields(config?.user_case_fields ?? []), [config]);
+  const defaults = useMemo(() => normalizeUserCase({ ...DEFAULT_USER_CASE, ...(config?.defaults ?? {}) }), [config]);
+
+  function setUserCase(nextUserCase: UserCase) {
+    const normalized = normalizeUserCase(nextUserCase);
+    setUserCaseState(normalized);
+    persistUserCase(normalized);
+  }
 
   async function submit(nextQuestion = question) {
     if (!nextQuestion.trim()) {
