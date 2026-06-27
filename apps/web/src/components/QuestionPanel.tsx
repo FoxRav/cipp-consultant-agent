@@ -24,7 +24,7 @@ export function QuestionPanel({ question, loading, showDebug, onQuestionChange, 
       <div className="question-actions">
         <label className="debug-toggle">
           <input type="checkbox" checked={showDebug} onChange={(event) => onDebugChange(event.target.checked)} />
-          <span>Show debug packet</span>
+          <span>Näytä tekninen paketti</span>
         </label>
         <button type="button" onClick={onSubmit} disabled={loading || !question.trim()}>
           {loading ? "Haetaan..." : "Lähetä"}

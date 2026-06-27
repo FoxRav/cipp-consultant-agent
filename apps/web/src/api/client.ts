@@ -42,9 +42,13 @@ export type AnswerResponse = {
   generation_mode: string;
   llm_used: boolean;
   case_used?: Record<string, number | boolean | string | null>;
+  cost_estimate?: Record<string, unknown>;
   cost_drivers?: string[];
   missing_information?: string[];
   estimate_type?: string;
+  estimate_low?: number | null;
+  estimate_high?: number | null;
+  estimate_currency?: string;
   retrieval_packet?: unknown;
   debug?: unknown;
 };
@@ -218,12 +222,12 @@ function mockAppConfig(): AppConfig {
       label: question.label
     })),
     ui_labels: {
-      answered: "Answered",
-      partial: "Partial",
-      insufficient_evidence: "Insufficient evidence",
-      llm_used: "LLM used",
-      expert_guidance: "Expert guidance",
-      source_grounded: "Source grounded"
+      answered: "Vastattu",
+      partial: "Osittainen",
+      insufficient_evidence: "Ei riittävää näyttöä",
+      llm_used: "LLM käytössä",
+      expert_guidance: "Asiantuntijaohje",
+      source_grounded: "Lähdeperustainen"
     }
   };
 }
@@ -335,6 +339,10 @@ async function mockAnswer(question: string, userCase: UserCase, includeDebug: bo
     ...(isCostQuestion
       ? {
           case_used: userCase,
+          estimate_type: "insufficient_reference_data",
+          estimate_low: null,
+          estimate_high: null,
+          estimate_currency: "EUR",
           cost_drivers: [
             "Asuntojen määrä, pystylinjat ja linjapituudet ovat mock-tilan näkyvät kustannusajurit.",
             "Euromääräistä arviota ei muodosteta mock-tilassa."

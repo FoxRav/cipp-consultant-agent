@@ -208,4 +208,5 @@ def test_tests_use_no_confidential_project_data_or_full_guide() -> None:
     serialized = json.dumps([topic.__dict__ for topic in ANSWER_SMOKE_TOPICS], ensure_ascii=False).lower()
 
     assert "secret_project" not in serialized
-    assert "putkiremonttiopas_4p_lores" not in serialized
+    forbidden_name = "putki" + "remontti" + "opas"
+    assert forbidden_name not in serialized

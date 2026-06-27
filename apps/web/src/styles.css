@@ -281,6 +281,27 @@ button {
   background: #f8fbfc;
 }
 
+.cost-estimate {
+  margin-top: 16px;
+  border: 1px solid #bfe0d8;
+  border-radius: 8px;
+  padding: 12px;
+  background: #edf8f5;
+}
+
+.cost-estimate h3 {
+  margin: 0 0 8px;
+  color: #216b5f;
+  font-size: 14px;
+}
+
+.cost-estimate p {
+  margin: 0;
+  color: #17202a;
+  font-size: 16px;
+  font-weight: 740;
+}
+
 .case-used h3 {
   margin: 0 0 10px;
   color: #405768;

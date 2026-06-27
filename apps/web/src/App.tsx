@@ -97,8 +97,8 @@ export default function App() {
     <main className="app-shell">
       <header className="hero-bar">
         <div>
-          <p className="eyebrow">Local dev playground</p>
-          <h1>CIPP Consultant Agent</h1>
+          <p className="eyebrow">Paikallinen testinäkymä</p>
+          <h1>Sukitusurakan neuvonta</h1>
         </div>
         <div className="hero-actions">
           <StatusBadges answer={answer} llmEnabled={config?.llm_enabled ?? false} apiHealth={apiHealth} />
@@ -124,7 +124,7 @@ export default function App() {
               <pre>{error}</pre>
               {showDebug && errorDetails ? (
                 <details>
-                  <summary>API error details</summary>
+              <summary>API-virheen tekniset tiedot</summary>
                   <pre>{JSON.stringify(errorDetails, null, 2)}</pre>
                 </details>
               ) : null}
@@ -133,7 +133,7 @@ export default function App() {
           <AnswerCard answer={answer} loading={loading} />
           {showDebug && answer ? (
             <details className="debug-panel">
-              <summary>Show debug packet</summary>
+              <summary>Näytä tekninen paketti</summary>
               <pre>{JSON.stringify({ debug: answer.debug, retrieval_packet: answer.retrieval_packet }, null, 2)}</pre>
             </details>
           ) : null}

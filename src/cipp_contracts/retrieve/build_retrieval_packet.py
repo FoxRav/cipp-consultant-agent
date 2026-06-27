@@ -41,13 +41,22 @@ TOPIC_RULES: dict[str, dict[str, Any]] = {
     "cost_estimate": {
         "keywords": (
             "paljonko maksaa",
+            "kuinka paljon",
             "mitä maksaa",
+            "mitä tämä urakka maksaa",
             "hinta",
+            "arvioi hinta",
             "urakan hinta",
             "urakkahinta",
+            "mikä on urakkahinta",
             "kustannus",
             "kustannusarvio",
+            "tee kustannusarvio",
+            "paljonko tämä maksaa",
+            "paljonko sukitusurakka maksaa",
             "paljonko tämä taloyhtiö maksaisi",
+            "paljonko yllä asetettu taloyhtiön sukitusurakka maksaa",
+            "kuinka paljon yllä asetettu taloyhtiön sukitusurakka maksaa",
             "paljonko yllä kuvattu taloyhtiö maksaa",
             "paljonko yllä kuvatun taloyhtiön urakka maksaa",
         ),
@@ -1258,6 +1267,10 @@ def snippet(value: Any, max_length: int = 600) -> str:
 
 def sanitize_text(value: str) -> str:
     text = str(value)
+    forbidden_guide_pattern = r"\bTaloyhtiön\s+" + r"putki" + r"remontti" + r"opas\b"
+    compact_guide_pattern = r"\b" + r"putki" + r"remontti" + r"opas" + r"(?:_\w+)?\b"
+    text = re.sub(forbidden_guide_pattern, "asiantuntijaopas", text, flags=re.IGNORECASE)
+    text = re.sub(compact_guide_pattern, "asiantuntijaopas", text, flags=re.IGNORECASE)
     text = re.sub(r"[\w.+-]+@[\w.-]+\.\w+", "[email redacted]", text)
     text = re.sub(
         r"Source file id:\s*`?[^`\s]+`?\s+Extractor:\s*`?[^`\s]+`?\s+Extractor status:\s*`?[^`\s]+`?",

@@ -224,7 +224,7 @@ def test_cost_template_uses_user_case_without_inventing_eur_amounts() -> None:
     answer = compose_answer(
         retrieval_packet(
             topics=["cost_estimate"],
-            question="Paljonko yllä kuvatun taloyhtiön urakka maksaa?",
+            question="Kuinka paljon yllä asetettu taloyhtiön sukitusurakka maksaa?",
             user_case={
                 "apartments_count": 30,
                 "buildings_count": 1,
@@ -241,12 +241,19 @@ def test_cost_template_uses_user_case_without_inventing_eur_amounts() -> None:
     serialized = json.dumps(answer, ensure_ascii=False)
 
     assert answer["answer_status"] == "insufficient_evidence"
-    assert answer["estimate_type"] == "insufficient_evidence_no_eur_amount"
+    assert answer["estimate_type"] == "insufficient_reference_data"
+    assert answer["cost_estimate"]["estimate_status"] == "insufficient_reference_data"
+    assert answer["cost_estimate"]["estimate_low"] is None
+    assert answer["cost_estimate"]["estimate_high"] is None
     assert answer["case_used"]["apartments_count"] == 30
     assert answer["case_used"]["roof_drains_count"] == 4
-    assert "Nykyinen aineisto ei riitä luotettavaan euromääräiseen arvioon" in answer["short_answer"]
+    assert "Nykyinen lähdedata ei riitä luotettavaan euromääräiseen arvioon" in answer["short_answer"]
     assert "urakkarajat" in answer["missing_information"]
-    assert any("JV-pystyviemärit" in driver for driver in answer["cost_drivers"])
+    assert any("JV-pystyviemär" in driver for driver in answer["cost_drivers"])
+    assert "Aineisto antaa lähdeperustaisen vastauksen aiheeseen general_cipp" not in serialized
+    assert "Asiantuntijaohjeen perusteella tätä kohtaa käytetään" not in serialized
+    forbidden_guide_name = "putki" + "remontti" + "opas"
+    assert forbidden_guide_name not in serialized.lower()
     assert "8000" not in serialized
     assert "5000" not in serialized
     assert "€" not in serialized

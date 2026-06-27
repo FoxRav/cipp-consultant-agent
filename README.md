@@ -202,12 +202,12 @@ Jokaiselle entitylle tai relaatiolle pyritään tallentamaan evidence `kg.eviden
 
 ## Legal guidance documents
 
-Repo tukee myös lakiosan alla käsiteltäviä asiantuntijaoppaita, jotka eivät ole lakeja, asetuksia, YSE-ehtoja tai sopimuksia. Ensimmäinen tällainen aineisto on Jari Virran `Taloyhtiön putkiremonttiopas`, joka tuodaan luokalla `source_type=expert_guidance`, `authority_level=non_binding_guidance` ja `binding_status=not_binding_law`.
+Repo tukee myös lakiosan alla käsiteltäviä asiantuntijaoppaita, jotka eivät ole lakeja, asetuksia, YSE-ehtoja tai sopimuksia. Tällainen aineisto tuodaan luokalla `source_type=expert_guidance`, `authority_level=non_binding_guidance` ja `binding_status=not_binding_law`.
 
 Tätä aineistoa käytetään taloyhtiön hallituksen, osakkaan ja muun amatööritoimijan prosessiohjaukseen: lähtötiedot, kuntotutkimukset, hankesuunnittelu, päätöspisteet, tarjouspyynnöt, vastaanotto ja takuu. Se ei syrjäytä varsinaista lakia, asetusta, YSE-ehtoa, urakkasopimusta tai tarjouspyyntöä. Jos oppaassa mainitaan laki tai asetus, maininta tallennetaan `legal_cross_reference`-tyyppisenä ja statuksella `mentioned_not_verified`, kunnes varsinainen normilähde linkitetään.
 
 ```powershell
-cipp-import-legal-guidance-pdf --file data/raw/legal_guidance/virta_putkiremonttiopas_2020/Putkiremonttiopas_4p_lores.pdf --document-code putkiremonttiopas_virta_2020 --title "Taloyhtiön putkiremonttiopas" --author "Jari Virta" --publisher "Kiinteistöalan Kustannus Oy" --publication-year 2020 --edition "4. painos"
+cipp-import-legal-guidance-pdf --file data/raw/legal_guidance/<asiantuntijaopas>.pdf --document-code expert_guidance_001 --title "Asiantuntijaopas" --publication-year 2020
 ```
 
 Importer purkaa sivuviitteet `raw.pages`-kerrokseen, tunnistaa päälukurakenteen ja tallentaa sääntöpohjaiset `legal.guidance_items`-rivit. Raportit ja PDF pysyvät `data/`-kansiossa eivätkä kuulu git-committeihin.
@@ -290,7 +290,7 @@ Endpointit:
 
 Frontend näyttää API health -tilan badgeissa: `api: ok`, `api: offline` tai `api: error`. Jos `/api/answer` ei vastaa, käyttöliittymä näyttää käytetyn API base URLin, endpointin ja backendin käynnistysohjeen pelkän geneerisen `Failed to fetch` -tekstin sijaan.
 
-Frontend löytyy kansiosta `apps/web`. Se on paikallinen testauskäyttöliittymä, jossa käyttäjä voi säätää taloyhtiön perustietoja, kysyä CIPP-/sukitusurakasta, nähdä lähdeperustaisen vastauksen, puuttuvat tiedot, epävarmuudet ja anonymisoidut lähteet.
+Frontend löytyy kansiosta `apps/web`. Se on suomenkielinen paikallinen testauskäyttöliittymä, jossa käyttäjä voi säätää taloyhtiön perustietoja, kysyä sukitusurakasta ja nähdä lähdeperustaisen vastauksen.
 
 Frontendin perusnäkymä on yksipalstainen. Erilliset oikean reunan `Lähteet`- ja `Epävarmuudet`-sivupaneelit on poistettu, eikä tyhjiä placeholder-kortteja renderöidä. Lähde-, epävarmuus-, puuttuva tieto- ja varoitusdata säilyy edelleen API-vastauksen JSONissa sekä debug-näkymässä kehittäjän tarkistusta varten.
 
@@ -318,7 +318,7 @@ http://127.0.0.1:5173/?resetCase=1
 
 Mock-testissä sama onnistuu osoitteella `http://127.0.0.1:5173/?mock=1&resetCase=1`.
 
-Hintakysymykset kuten `Paljonko yllä kuvatun taloyhtiön urakka maksaa?` tunnistetaan `cost_estimate`-intentiksi. Composer käyttää silloin yläpalkin nykyisiä `user_case`-arvoja, näyttää vastauskortissa `Arviossa käytetty case` -osion ja listaa kustannusajurit. Euromääräistä arviota ei anneta, ellei retrieval-paketissa ole riittävää, anonymisoitua ja lähdeperustaista hintadataa; muuten vastaus kertoo selvästi, että nykyinen aineisto ei riitä luotettavaan euromäärään, ja listaa puuttuvat tiedot.
+Hintakysymykset kuten `Kuinka paljon yllä asetettu taloyhtiön sukitusurakka maksaa?` tunnistetaan `cost_estimate`-intentiksi ennen yleisiä ohjeaiheita. Composer käyttää silloin yläpalkin nykyisiä `user_case`-arvoja, näyttää vastauskortissa `Arviossa käytetty case` -osion ja listaa kustannusajurit. Euromääräinen haarukka annetaan vain, jos rakenteisesta ja anonymisoidusta referenssidatasta löytyy riittävä hintapohja; muuten vastaus sanoo selvästi, ettei euromääräistä arviota voi muodostaa, ja listaa puuttuvat tiedot.
 
 Referenssiprojektit pysyvät sisäisenä anonymisoituna grounding-aineistona. UI näyttää lähteet `reference_001`-tyyppisinä viitteinä eikä näytä raakadatahakemistoja, luottamuksellisia tiedostonimiä tai oikeita projektinimiä. Debug-paketti on oletuksena pois päältä ja sekin kulkee API:n sanitoinnin läpi.
 

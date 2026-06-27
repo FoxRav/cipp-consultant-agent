@@ -3,7 +3,7 @@ CREATE SCHEMA IF NOT EXISTS legal;
 INSERT INTO ref.document_types (code, label, description) VALUES
     (
         'legal_guidance_pipe_renovation',
-        'Taloyhtiön putkiremonttiopas',
+        'Asiantuntijaopas',
         'Non-binding expert guidance for housing-company pipe renovation planning and decision processes'
     )
 ON CONFLICT (code) DO UPDATE

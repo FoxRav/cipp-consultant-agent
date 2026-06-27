@@ -103,12 +103,12 @@ USER_CASE_FIELD_CONFIG = [
 ]
 
 UI_LABELS = {
-    "answered": "Answered",
-    "partial": "Partial",
-    "insufficient_evidence": "Insufficient evidence",
-    "llm_used": "LLM used",
-    "expert_guidance": "Expert guidance",
-    "source_grounded": "Source grounded",
+    "answered": "Vastattu",
+    "partial": "Osittainen",
+    "insufficient_evidence": "Ei riittävää näyttöä",
+    "llm_used": "LLM käytössä",
+    "expert_guidance": "Asiantuntijaohje",
+    "source_grounded": "Lähdeperustainen",
 }
 
 AnswerService = Callable[[AnswerRequest], dict[str, Any]]

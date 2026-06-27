@@ -32,6 +32,7 @@ Mitä maksueristä kannattaa sopia CIPP-sukitusurakassa?
 Mitä pitää huomioida taloyhtiön JV-pystylinjojen ja pohjaviemärin sukituksessa?
 Mitä urakkarajoissa pitää huomioida?
 Paljonko yllä kuvatun taloyhtiön urakka maksaa?
+Kuinka paljon yllä asetettu taloyhtiön sukitusurakka maksaa?
 Mitä amatööritoimijan pitää ymmärtää ennen kuin taloyhtiö pyytää urakkatarjouksia?
 ```
 
@@ -68,11 +69,13 @@ Perusnäkymässä ei näytetä `Videotarkastus`- eikä `Yksikköhinnat / lisäty
 
 Hintakysymyksessä tarkista lisäksi:
 
+- oletuskysymys on `Kuinka paljon yllä asetettu taloyhtiön sukitusurakka maksaa?`
 - kysymys `Paljonko yllä kuvatun taloyhtiön urakka maksaa?` tunnistuu kustannusarvioksi
 - vastauskortissa näkyy `Arviossa käytetty case`
 - case-yhteenveto vastaa yläpalkin arvoja
 - jos luotettava lähdeperustainen hintadata ei riitä, vastaus sanoo tämän selvästi eikä keksi euromäärää
 - puuttuvat tiedot ja kustannusajurit näkyvät
+- vastaus ei muutu yleiseksi asiantuntijaohjeeksi eikä mainitse sisäisen oppaan nimeä
 
 ## Mock API -testi
 

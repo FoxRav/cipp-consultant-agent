@@ -127,6 +127,13 @@ def test_cost_question_detects_cost_estimate_topic_without_payment_topic() -> No
     assert any(match in matches for match in ("paljonko yllä kuvatun taloyhtiön urakka maksaa", "hinta"))
 
 
+def test_default_cost_question_detects_cost_estimate_before_guidance() -> None:
+    topics, _matches = detect_topics("Kuinka paljon yllä asetettu taloyhtiön sukitusurakka maksaa?")
+
+    assert topics[0] == "cost_estimate"
+    assert "expert_guidance" not in topics
+
+
 def test_user_case_parameters_are_stored_in_packet() -> None:
     packet = build_retrieval_packet(
         fixture_repository(),

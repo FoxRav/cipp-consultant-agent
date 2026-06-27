@@ -11,6 +11,7 @@ import psycopg
 from psycopg.rows import dict_row
 
 from cipp_contracts.config import database_url
+from cipp_contracts.answer.cost_estimator import estimate_cost_from_packet
 from cipp_contracts.retrieve.build_retrieval_packet import (
     PostgresRetrievalRepository,
     RetrievalLimits,
@@ -44,28 +45,6 @@ CASE_FIELD_LABELS = {
     "stormwater_line_length_m": "sadevesilinjat",
 }
 COST_CASE_FIELDS = tuple(CASE_FIELD_LABELS)
-COST_MISSING_INFORMATION = (
-    "urakkarajat",
-    "kuuluuko käyttövesi mukaan",
-    "sukitetaanko vain viemärit",
-    "kylpyhuoneiden / lattiakaivojen määrä",
-    "tonttilinjan todellinen pituus",
-    "pohjaviemärin todellinen pituus",
-    "sadevesilinjojen todellinen pituus",
-    "kaivojen määrä",
-    "videotarkastus / laadunvarmistusvaatimukset, jos myöhemmin tarvitaan",
-    "suunnitelmien taso",
-)
-COST_DRIVER_POINTS = (
-    "Asuntojen määrä ohjaa työn toistuvuutta ja asuntohajotusten laajuutta.",
-    "JV-pystyviemärit vaikuttavat linjakohtaiseen työhön ja aikataulutukseen.",
-    "SV-pystyviemärit ja kattokaivot voivat kasvattaa laajuutta, jos sadevesi kerätään katolta sisäisten linjojen kautta.",
-    "Pohjaviemärin pituus vaikuttaa alajuoksun työmäärään ja työmaan järjestelyihin.",
-    "Tonttilinjan pituus ja liittymäkohta pitää rajata erikseen suhteessa kunnan linjaan.",
-    "Sadevesilinjojen pituus ja kaivojen määrä pitää erottaa JV-laajuudesta.",
-    "Rakennusten ja porrashuoneiden määrä vaikuttavat työmaan vaiheistukseen ja asukashaittaan.",
-    "Urakkarajat ratkaisevat, mitä hintaan saa sisällyttää.",
-)
 
 
 @dataclass(frozen=True)
@@ -268,29 +247,40 @@ def compose_cost_estimate_answer(
     warnings: list[str],
     uncertainties: list[str],
 ) -> dict[str, Any]:
-    case_used = cost_case_used(retrieval_packet.get("user_case") or {})
-    missing_information = cost_missing_information(case_used)
-    if "Nykyinen aineisto ei sisällä turvallista, anonymisoitua euromääräistä hintalaskentaa." not in uncertainties:
-        uncertainties = [
-            *uncertainties,
-            "Nykyinen aineisto ei sisällä turvallista, anonymisoitua euromääräistä hintalaskentaa.",
-        ]
+    estimate = estimate_cost_from_packet(retrieval_packet)
+    case_used = estimate["case_used"]
+    status = "partial" if estimate["estimate_status"] == "estimated" else "insufficient_evidence"
+    estimate_low = estimate.get("estimate_low")
+    estimate_high = estimate.get("estimate_high")
+    if estimate["estimate_status"] == "estimated" and estimate_low is not None and estimate_high is not None:
+        short_answer = (
+            "Tällä hetkellä asetetun taloyhtiöcasen alustava lähdeperustainen haarukka on noin "
+            f"{format_eur(estimate_low)}-{format_eur(estimate_high)}. "
+            "ALV-statusta ei varmisteta tässä MVP-arviossa, ellei lähdedata sisällä sitä erikseen."
+        )
+    else:
+        short_answer = "Nykyinen lähdedata ei riitä luotettavaan euromääräiseen arvioon tälle caselle."
+    cost_uncertainties = [
+        *estimate.get("warnings", []),
+        "Arvio tarkentuu vasta, kun urakkarajat ja määrätiedot on varmistettu kohdekohtaisista asiakirjoista.",
+    ]
     return {
         "question": clean_text(retrieval_packet.get("question") or ""),
         "answer_scope": clean_text(retrieval_packet.get("answer_scope") or "general_cipp_user_case"),
-        "answer_status": "insufficient_evidence",
-        "short_answer": (
-            "Nykyinen aineisto ei riitä luotettavaan euromääräiseen arvioon. "
-            "Käytän kuitenkin yläpalkin taloyhtiö-casea kustannusajureiden arviointiin enkä keksi hintaa ilman lähdetukea."
-        ),
+        "answer_status": status,
+        "short_answer": clean_text(short_answer),
         "key_points": case_used_as_points(case_used),
-        "source_based_notes": build_source_notes(sources, 6),
+        "source_based_notes": cost_source_notes(estimate),
         "missing_user_case_fields": [clean_text(field) for field in missing_fields],
-        "missing_information": [clean_text(item) for item in missing_information],
-        "cost_drivers": [clean_text(item) for item in COST_DRIVER_POINTS],
+        "missing_information": [clean_text(item) for item in estimate.get("missing_inputs", [])],
+        "cost_drivers": [clean_text(item) for item in estimate.get("cost_drivers", [])],
         "case_used": case_used,
-        "estimate_type": "insufficient_evidence_no_eur_amount",
-        "uncertainties": [clean_text(item) for item in unique_preserve_order(uncertainties)],
+        "cost_estimate": estimate,
+        "estimate_type": estimate["estimate_status"],
+        "estimate_low": estimate_low,
+        "estimate_high": estimate_high,
+        "estimate_currency": estimate.get("estimate_currency", "EUR"),
+        "uncertainties": [clean_text(item) for item in unique_preserve_order(cost_uncertainties)],
         "recommended_next_questions": [
             "Mitkä tarkat urakkarajat koskevat JV-, SV-, pohjaviemäri- ja tonttilinjaosuutta?",
             "Kuuluuko käyttövesi mukaan vai koskeeko kysymys vain viemäreitä?",
@@ -298,7 +288,7 @@ def compose_cost_estimate_answer(
             "Mitkä ovat pohjaviemärin, tonttilinjan ja sadevesilinjojen toteutuneet pituudet?",
             "Onko laadunvarmistukselle tai loppukuvaukselle erityisiä vaatimuksia?",
         ],
-        "sources": sources,
+        "sources": [],
         "warnings": warnings,
         "generation_mode": GENERATION_MODE,
         "llm_used": LLM_USED,
@@ -323,10 +313,16 @@ def case_used_as_points(case_used: dict[str, Any]) -> list[str]:
     return [clean_text(point) for point in points]
 
 
-def cost_missing_information(case_used: dict[str, Any]) -> list[str]:
-    missing = list(COST_MISSING_INFORMATION)
-    missing.extend(CASE_FIELD_LABELS[field] for field in COST_CASE_FIELDS if case_used.get(field) in (None, ""))
-    return unique_preserve_order(missing)
+def cost_source_notes(estimate: dict[str, Any]) -> list[str]:
+    if estimate["estimate_status"] == "estimated":
+        return [f"Perustuu {estimate['reference_count']} anonymisoituun rakenteiseen referenssiriviin."]
+    return [
+        "Euromääräistä arviota ei muodostettu, koska rakenteista ja anonymisoitua hintadataa ei ole vielä riittävästi."
+    ]
+
+
+def format_eur(value: Any) -> str:
+    return f"{int(value):,}".replace(",", " ") + " EUR"
 
 
 def determine_answer_status(packet: dict[str, Any], sources: list[dict[str, Any]]) -> str:

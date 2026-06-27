@@ -21,12 +21,13 @@ export function AnswerCard({ answer, loading }: Props) {
   return (
     <section className="answer-card">
       <div className="answer-meta">
-        <span>{answer.answer_status}</span>
+        <span>{statusLabel(answer.answer_status)}</span>
         <span>{answer.duration_ms} ms</span>
-        <span>{answer.generation_mode}</span>
+        <span>lähdeperustainen</span>
       </div>
       <h2>Vastaus</h2>
       <p className="short-answer">{answer.short_answer}</p>
+      <CostEstimate answer={answer} />
       <CaseUsed caseUsed={answer.case_used} />
       <ListBlock title="Keskeiset huomiot" values={answer.key_points} ordered />
       <ListBlock title="Kustannusajurit" values={answer.cost_drivers ?? []} />
@@ -34,6 +35,28 @@ export function AnswerCard({ answer, loading }: Props) {
       <ListBlock title="Lähteiden tukemat muistiinpanot" values={answer.source_based_notes} />
       <ListBlock title="Seuraavat tarkentavat kysymykset" values={answer.recommended_next_questions} />
     </section>
+  );
+}
+
+function CostEstimate({ answer }: { answer: AnswerResponse }) {
+  if (!answer.estimate_type) {
+    return null;
+  }
+  if (answer.estimate_low == null || answer.estimate_high == null) {
+    return (
+      <div className="cost-estimate">
+        <h3>Alustava kustannusarvio</h3>
+        <p>Euromääräistä arviota ei voitu muodostaa nykyisestä lähdedatasta.</p>
+      </div>
+    );
+  }
+  return (
+    <div className="cost-estimate">
+      <h3>Alustava kustannusarvio</h3>
+      <p>
+        {formatAmount(answer.estimate_low)}-{formatAmount(answer.estimate_high)} {answer.estimate_currency ?? "EUR"}
+      </p>
+    </div>
   );
 }
 
@@ -65,6 +88,19 @@ function CaseUsed({ caseUsed }: { caseUsed?: Record<string, number | boolean | s
       </dl>
     </div>
   );
+}
+
+function statusLabel(status: string) {
+  if (status === "answered") return "vastattu";
+  if (status === "partial") return "osittainen";
+  if (status === "insufficient_evidence") return "ei riittävää näyttöä";
+  return status;
+}
+
+function formatAmount(value: number | string) {
+  const numeric = typeof value === "number" ? value : Number.parseInt(value, 10);
+  if (!Number.isFinite(numeric)) return String(value);
+  return numeric.toLocaleString("fi-FI");
 }
 
 function ListBlock({ title, values, ordered = false }: { title: string; values: string[]; ordered?: boolean }) {

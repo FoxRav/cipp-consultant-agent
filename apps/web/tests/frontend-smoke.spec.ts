@@ -3,17 +3,17 @@ import { expect, test } from "@playwright/test";
 test("frontend playground works with mock API", async ({ page }) => {
   await page.goto("/?mock=1&resetCase=1");
 
-  await expect(page.getByRole("heading", { name: "CIPP Consultant Agent" })).toBeVisible();
-  await expect(page.getByText("api: ok")).toBeVisible();
-  await expect(page.getByLabel("Auth prototype")).toBeVisible();
-  await expect(page.getByText("Mock auth")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Sukitusurakan neuvonta" })).toBeVisible();
+  await expect(page.getByText("API: ok")).toBeVisible();
+  await expect(page.getByLabel("Kirjautumisen prototyyppi")).toBeVisible();
+  await expect(page.getByText("Testikirjautuminen")).toBeVisible();
   await expect(page.getByLabel("Kysy CIPP-/sukitusurakasta")).toHaveValue(
     "Kuinka paljon yllä asetettu taloyhtiön sukitusurakka maksaa?"
   );
   await expectRemovedSidePanels(page);
-  await page.getByLabel("Auth email").fill("board@example.test");
-  await page.getByLabel("Auth password").fill("local-password");
-  await page.getByRole("button", { name: "Login" }).click();
+  await page.getByLabel("Sähköposti").fill("board@example.test");
+  await page.getByLabel("Salasana").fill("local-password");
+  await page.getByRole("button", { name: "Kirjaudu" }).click();
   await expect(page.getByText("board@example.test")).toBeVisible();
 
   const expectedFields = [
@@ -59,7 +59,7 @@ test("frontend playground works with mock API", async ({ page }) => {
   await roofDrains.fill("6");
 
   await page.getByLabel("Kysy CIPP-/sukitusurakasta").fill("Paljonko yllä kuvatun taloyhtiön urakka maksaa?");
-  await page.getByLabel("Show debug packet").check();
+  await page.getByLabel("Näytä tekninen paketti").check();
   await page.getByRole("button", { name: "Lähetä" }).click();
 
   await expect(page.getByRole("heading", { name: "Vastaus" })).toBeVisible();
@@ -68,10 +68,10 @@ test("frontend playground works with mock API", async ({ page }) => {
   await expect(caseUsed.getByText("Kattokaivot")).toBeVisible();
   await expect(caseUsed.getByText("6", { exact: true })).toBeVisible();
   await expect(page.getByText("4 SV-pystyviemäriä ja 6 kattokaivoa")).toBeVisible();
-  await expect(page.getByText("llm_used=false")).toBeVisible();
+  await expect(page.getByText("LLM ei käytössä")).toBeVisible();
   await expectRemovedSidePanels(page);
 
-  await expect(page.locator(".debug-panel summary")).toHaveText("Show debug packet");
+  await expect(page.locator(".debug-panel summary")).toHaveText("Näytä tekninen paketti");
   await page.locator(".debug-panel summary").click();
   await expect(page.getByText('"mock_api": true')).toBeVisible();
 
@@ -83,9 +83,12 @@ test("frontend playground works with mock API", async ({ page }) => {
   expect(bodyText).not.toContain(".xlsx");
   expect(bodyText).not.toContain(".csv");
   expect(bodyText).not.toContain("As Oy ");
+  const forbiddenGuideName = "putki" + "remontti" + "opas";
+  expect(bodyText.toLowerCase()).not.toContain(`taloyhtiön ${forbiddenGuideName}`);
+  expect(bodyText.toLowerCase()).not.toContain(forbiddenGuideName);
 
-  await page.getByRole("button", { name: "Logout" }).click();
-  await expect(page.getByRole("button", { name: "Login" })).toBeVisible();
+  await page.getByRole("button", { name: "Kirjaudu ulos" }).click();
+  await expect(page.getByRole("button", { name: "Kirjaudu" })).toBeVisible();
 });
 
 test("frontend resets stale localStorage case state", async ({ page }) => {
@@ -113,8 +116,8 @@ test("frontend resets stale localStorage case state", async ({ page }) => {
 test("frontend shows actionable diagnostics when API is offline", async ({ page }) => {
   await page.goto("/?apiBase=http://127.0.0.1:9");
 
-  await expect(page.getByRole("heading", { name: "CIPP Consultant Agent" })).toBeVisible();
-  await expect(page.getByText("api: offline")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Sukitusurakan neuvonta" })).toBeVisible();
+  await expect(page.getByText("API: ei yhteyttä")).toBeVisible();
   await expect(page.getByText("API-yhteys epäonnistui.")).toBeVisible();
   await expect(page.getByText("cipp-run-dev-api --host 127.0.0.1 --port 8000")).toBeVisible();
 

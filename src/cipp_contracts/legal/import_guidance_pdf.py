@@ -191,7 +191,7 @@ def identify_sections(pages: list[ParsedPage]) -> list[GuidanceSection]:
             if any(marker in normalized for marker in markers) and number not in {item[0] for item in starts}:
                 starts.append((number, title, page.page_no))
     if not starts and pages:
-        starts.append(("1", "Taloyhtiön putkiremonttiopas", pages[0].page_no))
+        starts.append(("1", "Asiantuntijaopas", pages[0].page_no))
     starts.sort(key=lambda item: item[2])
     sections: list[GuidanceSection] = []
     for index, (number, title, page_start) in enumerate(starts):
@@ -707,7 +707,7 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--file", required=True, type=Path)
     parser.add_argument("--document-code", required=True)
-    parser.add_argument("--title", default="Taloyhtiön putkiremonttiopas")
+    parser.add_argument("--title", default="Asiantuntijaopas")
     parser.add_argument("--author")
     parser.add_argument("--publisher")
     parser.add_argument("--publication-year", type=int)

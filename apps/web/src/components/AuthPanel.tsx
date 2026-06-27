@@ -24,7 +24,7 @@ export function AuthPanel({ adapter, session, onSessionChange }: Props) {
           : await adapter.register({ email, password });
       onSessionChange(nextSession);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Authentication failed.");
+      setError(err instanceof Error ? err.message : "Kirjautuminen epäonnistui.");
     } finally {
       setLoading(false);
     }
@@ -36,33 +36,33 @@ export function AuthPanel({ adapter, session, onSessionChange }: Props) {
   }
 
   return (
-    <section className="auth-panel" aria-label="Auth prototype">
+    <section className="auth-panel" aria-label="Kirjautumisen prototyyppi">
       <div>
-        <p className="panel-label">Auth prototype</p>
-        <strong>{adapter.provider === "mock" ? "Mock auth" : "Supabase planned"}</strong>
+        <p className="panel-label">Kirjautumisen prototyyppi</p>
+        <strong>{adapter.provider === "mock" ? "Testikirjautuminen" : "Supabase suunnitteilla"}</strong>
       </div>
       {session ? (
         <div className="auth-session">
           <span>{session.user.email}</span>
           <button type="button" onClick={() => void logout()}>
-            Logout
+            Kirjaudu ulos
           </button>
         </div>
       ) : (
         <div className="auth-form">
           <select value={mode} onChange={(event) => setMode(event.target.value as "login" | "register")}>
-            <option value="login">Login</option>
-            <option value="register">Register</option>
+            <option value="login">Kirjaudu</option>
+            <option value="register">Rekisteröidy</option>
           </select>
-          <input aria-label="Auth email" value={email} onChange={(event) => setEmail(event.target.value)} />
+          <input aria-label="Sähköposti" value={email} onChange={(event) => setEmail(event.target.value)} />
           <input
-            aria-label="Auth password"
+            aria-label="Salasana"
             type="password"
             value={password}
             onChange={(event) => setPassword(event.target.value)}
           />
           <button type="button" disabled={loading || !email || !password} onClick={() => void submit()}>
-            {loading ? "Working..." : mode === "login" ? "Login" : "Register"}
+            {loading ? "Käsitellään..." : mode === "login" ? "Kirjaudu" : "Rekisteröidy"}
           </button>
         </div>
       )}
@@ -70,4 +70,3 @@ export function AuthPanel({ adapter, session, onSessionChange }: Props) {
     </section>
   );
 }
-

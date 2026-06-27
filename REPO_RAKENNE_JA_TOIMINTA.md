@@ -759,7 +759,7 @@ Tämä builder ei käytä LLM:ää eikä arvaa puuttuvia suhteita. Jos suhteelle
 
 Tuo lakiosan alla käsiteltävän, mutta ei-sitovan asiantuntijaoppaan tietokantaan.
 
-Nykyinen käyttötapa on Jari Virran `Taloyhtiön putkiremonttiopas`, joka luokitellaan näin:
+Nykyinen käyttötapa on sisäinen asiantuntijaopas, joka luokitellaan näin:
 
 - `source_type = expert_guidance`
 - `authority_level = non_binding_guidance`
@@ -841,6 +841,7 @@ Mitä se tekee:
 - näyttää lähteet vain anonymisoituina `reference_001`-tyyppisinä viitteinä
 - merkitsee expert guidance -lähteet lähdeluokalla `expert_guidance`
 - käyttää retrievalin sanitointisääntöjä ja redaktoi myös varomattomat rahamäärät vastauksista
+- käyttää hintakysymyksissä `cost_estimate`-reittiä ja `cost_estimator.py`-moduulia, jolloin vastaus perustuu yläpalkin `user_case`-arvoihin eikä yleiseen ohjetemplateen
 
 `answer_status` voi olla:
 
@@ -849,6 +850,10 @@ Mitä se tekee:
 - `insufficient_evidence`: lähdekatkelmia ei ole riittävästi turvalliseen vastaukseen
 
 Tämä moduuli ei ole täysi agentti. Se ei keskustele, suunnittele uutta tiedonhakua eikä muodosta vapaata LLM-vastausta. `generation_mode` on `deterministic_source_grounded` ja `llm_used` on aina `false`.
+
+### `src/cipp_contracts/answer/cost_estimator.py`
+
+Deterministinen MVP-kustannusarvioija hintakysymyksille. Se saa käyttää vain rakenteista hintadataa ja palauttaa aina strukturoidun tuloksen: `estimate_status`, mahdollinen haarukka, `case_used`, kustannusajurit, puuttuvat syötteet, varoitukset ja anonymisoitu referenssimäärä. Se ei käytä asiantuntijaohjeita hintalaskennan pohjana.
 
 Kun vastaus perustuu asiantuntijaoppaaseen, composer käyttää muotoa “Asiantuntijaohjeen perusteella” eikä “laki määrää”. Se lisää epävarmuuden siitä, että sitova oikeudellinen tulkinta pitää varmistaa varsinaisesta lakitekstistä, yhtiöjärjestyksestä, sopimuksesta tai asiantuntijalta.
 
@@ -1144,7 +1149,7 @@ cipp-build-knowledge-graph --project-code reference_001 --prune
 Tuo ei-sitovan asiantuntijaoppaan legal guidance -kerrokseen.
 
 ```powershell
-cipp-import-legal-guidance-pdf --file data/raw/legal_guidance/virta_putkiremonttiopas_2020/Putkiremonttiopas_4p_lores.pdf --document-code putkiremonttiopas_virta_2020 --title "Taloyhtiön putkiremonttiopas" --author "Jari Virta" --publisher "Kiinteistöalan Kustannus Oy" --publication-year 2020 --edition "4. painos"
+cipp-import-legal-guidance-pdf --file data/raw/legal_guidance/<asiantuntijaopas>.pdf --document-code expert_guidance_001 --title "Asiantuntijaopas" --publication-year 2020
 ```
 
 Komento kirjoittaa `raw.source_files`, `raw.pages`, `legal.guidance_documents`, `legal.guidance_sections` ja `legal.guidance_items` -kerroksiin. `--dry-run` purkaa ja luokittelee aineiston mutta rollbackaa tietokantamuutokset. Raportteihin ei kirjoiteta pitkiä tekijänoikeudellisia katkelmia.
@@ -1255,11 +1260,13 @@ Frontendin oletuscase on `apartments_count=30`, `buildings_count=1`, `staircases
 
 Selain tallentaa case-tilan versionoidusti localStorageen. Jos `cipp_user_case_schema_version` puuttuu tai ei vastaa `CASE_SCHEMA_VERSION=2` -arvoa, vanha case-state poistetaan ja defaultit palautetaan. Manuaalitestissä `http://127.0.0.1:5173/?resetCase=1` pakottaa saman nollauksen heti.
 
-Hintakysymykset kuten `Paljonko yllä kuvatun taloyhtiön urakka maksaa?` tunnistetaan `cost_estimate`-topiciksi erillään maksueristä. Composer käyttää silloin yläpalkin nykyistä casea, palauttaa `case_used`-kentän ja näyttää kustannusajurit. Jos retrieval-paketissa ei ole riittävää anonymisoitua hintadataa, vastaus on `insufficient_evidence`: se ei keksi euromäärää, vaan listaa puuttuvat tiedot kuten urakkarajat, käyttöveden kuulumisen, kylpyhuoneiden/lattiakaivojen määrän, todelliset linjapituudet, kaivojen määrän, laadunvarmistusvaatimukset ja suunnitelmien tason.
+Hintakysymykset kuten `Kuinka paljon yllä asetettu taloyhtiön sukitusurakka maksaa?` tunnistetaan `cost_estimate`-topiciksi erillään maksueristä ja ennen yleisiä ohjeaiheita. Composer käyttää silloin yläpalkin nykyistä casea, palauttaa `case_used`-kentän ja näyttää kustannusajurit. Jos rakenteista anonymisoitua hintadataa ei ole riittävästi, vastaus on `insufficient_evidence`: se ei keksi euromäärää, vaan listaa puuttuvat tiedot kuten urakkarajat, käyttöveden kuulumisen, kylpyhuoneiden/lattiakaivojen määrän, todelliset linjapituudet, kaivojen määrän, laadunvarmistusvaatimukset ja suunnitelmien tason.
 
 Tärkeä rajaus: frontend näyttää vastauksen, jonka source-grounded composer muodostaa. Se ei kutsu LLM:ää eikä saa näyttää referenssiprojektien oikeita nimiä tai raakaa tiedostopolkuja.
 
 Frontendin perusnäkymä on yksipalstainen. Erilliset oikean reunan `Lähteet`- ja `Epävarmuudet`-kortit on poistettu, eikä tyhjiä placeholder-kortteja renderöidä. Lähteet, epävarmuudet, puuttuvat tiedot ja varoitukset säilyvät API-vastauksen JSONissa ja debug-näkymässä, mutta niitä ei näytetä erillisinä tyhjinä sivupaneeleina.
+
+Näkyvä käyttöliittymä on suomenkielinen. Sisäistä asiantuntijaopasta voidaan referoida tarvittaessa lähdepohjana, mutta oppaan nimeä ei näytetä käyttäjälle.
 
 Mock API -tila käynnistyy joko URL-parametrilla `?mock=1` tai frontendin paikallisella `VITE_USE_MOCK_API=true` -asetuksella. Mock-vastaus on tarkoitettu vain UI:n nopeaan testaukseen; live-testissä käytetään `cipp-run-dev-api`-palvelua ja oikeaa PostgreSQL-tietopohjaa.
 
