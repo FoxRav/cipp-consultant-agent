@@ -1209,6 +1209,8 @@ API:n endpointit ovat:
 
 API ei sisällä omaa rinnakkaista CIPP-päättelyä. Se käyttää nykyisiä `retrieve`- ja `answer`-kerroksia ja lisää vain paikallisen HTTP-rajapinnan, request id:n, keston ja viimeisen sanitointivahdin. `include_debug=true` voi palauttaa lyhyen debug-paketin, mutta raakadataa, tiedostopolkuja, oikeita projektinimiä tai henkilötietoja ei pidä palauttaa.
 
+`POST /api/answer` palauttaa myös virhetilanteessa JSON-vastauksen. Jos composer tai retrieval kaatuu, vastaus on `api_status=error`, `error_code=answer_composer_failed` ja mukana on `request_id`. Stack trace jää backend-lokiin eikä sitä näytetä käyttäjälle.
+
 ## 19.1 Paikallinen frontend playground
 
 `apps/web` on Vite + React + TypeScript -käyttöliittymä paikalliseen testaukseen. Se ei ole SaaS-tuote eikä sisällä kirjautumista, maksamista, käyttäjähallintaa tai multi-tenant-arkkitehtuuria.
@@ -1255,6 +1257,8 @@ Frontendin oletusarvoissa `sv_verticals_count=4` ja `roof_drains_count=4`. Katto
 Tärkeä rajaus: frontend näyttää vastauksen, jonka source-grounded composer muodostaa. Se ei kutsu LLM:ää eikä saa näyttää referenssiprojektien oikeita nimiä tai raakaa tiedostopolkuja.
 
 Mock API -tila käynnistyy joko URL-parametrilla `?mock=1` tai frontendin paikallisella `VITE_USE_MOCK_API=true` -asetuksella. Mock-vastaus on tarkoitettu vain UI:n nopeaan testaukseen; live-testissä käytetään `cipp-run-dev-api`-palvelua ja oikeaa PostgreSQL-tietopohjaa.
+
+Frontend näyttää API health -tilan badgeissa ja muuttaa fetch-/CORS-/offline-virheet käyttäjälle ymmärrettäväksi viestiksi. Virheilmoituksessa näkyy API base URL, endpoint ja backendin käynnistysohje. Debug toggle näyttää tekniset error detailit ilman stack tracea.
 
 Auth-prototyyppi käyttää erillistä adapterirajapintaa. `mock` on oletusprovider ja tuottaa paikallisen sessionin selaimen localStorageen. `supabase` on tässä vaiheessa vain suunniteltu provider-stub: Supabasea ei vielä käytetä tuotantokirjautumiseen, eikä repo sisällä Supabase-avaimia. Oma CIPP-tietokanta pysyy pääjärjestelmänä.
 

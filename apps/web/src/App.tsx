@@ -1,5 +1,17 @@
 import { useEffect, useMemo, useState } from "react";
-import { getAppConfig, getSuggestedQuestions, postAnswer, type AnswerResponse, type AppConfig, type SuggestedQuestion, type UserCase } from "./api/client";
+import {
+  ApiClientError,
+  apiBaseUrlLabel,
+  getAppConfig,
+  getHealth,
+  getSuggestedQuestions,
+  postAnswer,
+  type ApiErrorDetails,
+  type AnswerResponse,
+  type AppConfig,
+  type SuggestedQuestion,
+  type UserCase
+} from "./api/client";
 import { createAuthAdapter } from "./auth/authAdapter";
 import type { AuthSession } from "./auth/types";
 import { AnswerCard } from "./components/AnswerCard";
@@ -37,11 +49,18 @@ export default function App() {
   const [showDebug, setShowDebug] = useState(false);
   const [answer, setAnswer] = useState<AnswerResponse | null>(null);
   const [session, setSession] = useState<AuthSession | null>(null);
+  const [apiHealth, setApiHealth] = useState<"checking" | "ok" | "offline" | "error">("checking");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [errorDetails, setErrorDetails] = useState<ApiErrorDetails | null>(null);
   const authAdapter = useMemo(() => createAuthAdapter(), []);
 
   useEffect(() => {
+    void getHealth()
+      .then(() => setApiHealth("ok"))
+      .catch((err: unknown) => {
+        setApiHealth(err instanceof ApiClientError ? "offline" : "error");
+      });
     void Promise.all([getAppConfig(), getSuggestedQuestions()])
       .then(([appConfig, fetchedSuggestions]) => {
         setConfig(appConfig);
@@ -49,7 +68,8 @@ export default function App() {
         setSuggestions(fetchedSuggestions);
       })
       .catch((err: unknown) => {
-        setError(err instanceof Error ? err.message : "API-yhteys epäonnistui.");
+        setError(formatError(err));
+        setErrorDetails(err instanceof ApiClientError ? err.details : null);
       });
   }, []);
 
@@ -67,10 +87,14 @@ export default function App() {
     setQuestion(nextQuestion);
     setLoading(true);
     setError(null);
+    setErrorDetails(null);
     try {
       setAnswer(await postAnswer(nextQuestion, userCase, showDebug, session?.accessToken));
+      setApiHealth("ok");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Vastauksen muodostus epäonnistui.");
+      setError(formatError(err));
+      setErrorDetails(err instanceof ApiClientError ? err.details : null);
+      setApiHealth(err instanceof ApiClientError && !err.details.status ? "offline" : "error");
     } finally {
       setLoading(false);
     }
@@ -84,7 +108,7 @@ export default function App() {
           <h1>CIPP Consultant Agent</h1>
         </div>
         <div className="hero-actions">
-          <StatusBadges answer={answer} llmEnabled={config?.llm_enabled ?? false} />
+          <StatusBadges answer={answer} llmEnabled={config?.llm_enabled ?? false} apiHealth={apiHealth} />
           <AuthPanel adapter={authAdapter} session={session} onSessionChange={setSession} />
         </div>
       </header>
@@ -102,7 +126,17 @@ export default function App() {
             onDebugChange={setShowDebug}
           />
           <SuggestedQuestions suggestions={suggestions} onSelect={(item) => void submit(item.question)} />
-          {error ? <div className="error-box">{error}</div> : null}
+          {error ? (
+            <div className="error-box">
+              <pre>{error}</pre>
+              {showDebug && errorDetails ? (
+                <details>
+                  <summary>API error details</summary>
+                  <pre>{JSON.stringify(errorDetails, null, 2)}</pre>
+                </details>
+              ) : null}
+            </div>
+          ) : null}
           <AnswerCard answer={answer} loading={loading} />
         </div>
 
@@ -123,4 +157,19 @@ export default function App() {
       </section>
     </main>
   );
+}
+
+function formatError(err: unknown): string {
+  if (err instanceof ApiClientError) {
+    return err.message;
+  }
+  if (err instanceof Error) {
+    return [
+      "Sovelluksessa tapahtui virhe.",
+      err.message,
+      "",
+      `API base URL: ${apiBaseUrlLabel()}`
+    ].join("\n");
+  }
+  return "Tuntematon virhe.";
 }

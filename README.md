@@ -288,6 +288,8 @@ Endpointit:
 - `GET /api/suggested-questions`
 - `POST /api/answer`
 
+Frontend näyttää API health -tilan badgeissa: `api: ok`, `api: offline` tai `api: error`. Jos `/api/answer` ei vastaa, käyttöliittymä näyttää käytetyn API base URLin, endpointin ja backendin käynnistysohjeen pelkän geneerisen `Failed to fetch` -tekstin sijaan.
+
 Frontend löytyy kansiosta `apps/web`. Se on paikallinen testauskäyttöliittymä, jossa käyttäjä voi säätää taloyhtiön perustietoja, kysyä CIPP-/sukitusurakasta, nähdä lähdeperustaisen vastauksen, puuttuvat tiedot, epävarmuudet ja anonymisoidut lähteet.
 
 ```powershell

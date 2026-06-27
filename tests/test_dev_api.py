@@ -47,6 +47,13 @@ def client(captured: list[dict[str, object]] | None = None) -> TestClient:
     return TestClient(create_app(answer_service=fake_answer_service(captured)))
 
 
+def failing_client() -> TestClient:
+    def _service(_request):
+        raise RuntimeError("synthetic composer failure")
+
+    return TestClient(create_app(answer_service=_service))
+
+
 def answer_payload() -> dict[str, object]:
     return {
         "question": "Mitä pitää huomioida taloyhtiön JV-pystylinjojen ja pohjaviemärin sukituksessa?",
@@ -149,3 +156,16 @@ def test_missing_user_case_fields_are_visible() -> None:
 
     assert "includes_yard_line" in body["missing_user_case_fields"]
     assert body["uncertainties"]
+
+
+def test_answer_endpoint_returns_json_error_without_stack_trace() -> None:
+    response = failing_client().post("/api/answer", json=answer_payload())
+
+    assert response.status_code == 500
+    body = response.json()
+    assert body["api_status"] == "error"
+    assert body["error_code"] == "answer_composer_failed"
+    assert body["request_id"]
+    serialized = json.dumps(body, ensure_ascii=False)
+    assert "synthetic composer failure" not in serialized
+    assert "Traceback" not in serialized

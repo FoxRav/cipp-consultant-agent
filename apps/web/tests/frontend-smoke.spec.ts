@@ -4,6 +4,7 @@ test("frontend playground works with mock API", async ({ page }) => {
   await page.goto("/?mock=1");
 
   await expect(page.getByRole("heading", { name: "CIPP Consultant Agent" })).toBeVisible();
+  await expect(page.getByText("api: ok")).toBeVisible();
   await expect(page.getByLabel("Auth prototype")).toBeVisible();
   await expect(page.getByText("Mock auth")).toBeVisible();
   await page.getByLabel("Auth email").fill("board@example.test");
@@ -83,4 +84,25 @@ test("frontend playground works with mock API", async ({ page }) => {
 
   await page.getByRole("button", { name: "Logout" }).click();
   await expect(page.getByRole("button", { name: "Login" })).toBeVisible();
+});
+
+test("frontend shows actionable diagnostics when API is offline", async ({ page }) => {
+  await page.goto("/?apiBase=http://127.0.0.1:9");
+
+  await expect(page.getByRole("heading", { name: "CIPP Consultant Agent" })).toBeVisible();
+  await expect(page.getByText("api: offline")).toBeVisible();
+  await expect(page.getByText("API-yhteys epäonnistui.")).toBeVisible();
+  await expect(page.getByText("cipp-run-dev-api --host 127.0.0.1 --port 8000")).toBeVisible();
+
+  await page.getByLabel("Kysy CIPP-/sukitusurakasta").fill(
+    "Mitä maksueristä kannattaa sopia CIPP-sukitusurakassa?"
+  );
+  await page.getByRole("button", { name: "Lähetä" }).click();
+
+  await expect(page.getByText("Endpoint: /api/answer")).toBeVisible();
+  await expect(page.getByText("API base URL: http://127.0.0.1:9")).toBeVisible();
+  const bodyText = await page.locator("body").innerText();
+  expect(bodyText).not.toContain("Failed to fetch");
+  expect(bodyText).not.toContain("TypeError");
+  expect(bodyText).not.toContain("Traceback");
 });

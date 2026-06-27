@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import logging
 import re
 import time
 import uuid
@@ -11,6 +12,7 @@ from typing import Any
 import psycopg
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from psycopg.rows import dict_row
 
 from cipp_contracts.answer.compose_answer import compose_answer
@@ -28,6 +30,7 @@ from .schemas import AnswerRequest, AppConfigResponse, HealthResponse, Suggested
 SERVICE_NAME = "cipp-consultant-agent-dev-api"
 LLM_ENABLED = False
 ENVIRONMENT = "local_dev"
+LOGGER = logging.getLogger(__name__)
 
 QUESTION_SUGGESTIONS = [
     SuggestedQuestion(
@@ -130,8 +133,8 @@ def create_app(answer_service: AnswerService | None = None) -> FastAPI:
         CORSMiddleware,
         allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
         allow_credentials=False,
-        allow_methods=["GET", "POST"],
-        allow_headers=["*"],
+        allow_methods=["GET", "POST", "OPTIONS"],
+        allow_headers=["Content-Type", "Authorization"],
     )
 
     @app.get("/api/health", response_model=HealthResponse)
@@ -161,19 +164,50 @@ def create_app(answer_service: AnswerService | None = None) -> FastAPI:
         }
 
     @app.post("/api/answer")
-    def answer(request: AnswerRequest) -> dict[str, Any]:
+    def answer(request: AnswerRequest) -> Any:
         started = time.perf_counter()
         request_id = str(uuid.uuid4())
-        payload = app.state.answer_service(request)
-        payload = sanitize_api_payload(payload)
-        payload.update(
-            {
-                "api_status": "ok",
-                "request_id": request_id,
-                "duration_ms": round((time.perf_counter() - started) * 1000, 2),
-            }
+        user_case = request.user_case.model_dump(exclude_none=True)
+        LOGGER.info(
+            "api_answer_start request_id=%s endpoint=/api/answer question_length=%s user_case_keys=%s",
+            request_id,
+            len(request.question),
+            sorted(user_case.keys()),
         )
-        return payload
+        try:
+            payload = app.state.answer_service(request)
+            payload = sanitize_api_payload(payload)
+            duration_ms = round((time.perf_counter() - started) * 1000, 2)
+            payload.update(
+                {
+                    "api_status": "ok",
+                    "request_id": request_id,
+                    "duration_ms": duration_ms,
+                }
+            )
+            LOGGER.info(
+                "api_answer_success request_id=%s endpoint=/api/answer duration_ms=%s",
+                request_id,
+                duration_ms,
+            )
+            return payload
+        except Exception:
+            duration_ms = round((time.perf_counter() - started) * 1000, 2)
+            LOGGER.exception(
+                "api_answer_error request_id=%s endpoint=/api/answer duration_ms=%s",
+                request_id,
+                duration_ms,
+            )
+            return JSONResponse(
+                status_code=500,
+                content={
+                    "api_status": "error",
+                    "error_code": "answer_composer_failed",
+                    "message": "Answer composer failed. See backend logs for details.",
+                    "request_id": request_id,
+                    "duration_ms": duration_ms,
+                },
+            )
 
     return app
 
@@ -248,6 +282,7 @@ def main() -> None:
 
     import uvicorn
 
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
     uvicorn.run("cipp_contracts.api.dev_server:app", host=args.host, port=args.port, reload=args.reload)
 
 

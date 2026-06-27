@@ -54,6 +54,31 @@ export type AnswerResponse = {
   debug?: unknown;
 };
 
+export type HealthResponse = {
+  status: string;
+  service: string;
+  llm_enabled: boolean;
+};
+
+export type ApiErrorDetails = {
+  apiBaseUrl: string;
+  endpoint: string;
+  method: string;
+  status?: number;
+  responseBody?: string;
+  cause?: string;
+};
+
+export class ApiClientError extends Error {
+  details: ApiErrorDetails;
+
+  constructor(message: string, details: ApiErrorDetails) {
+    super(message);
+    this.name = "ApiClientError";
+    this.details = details;
+  }
+}
+
 export type AppConfig = {
   environment: string;
   llm_enabled: boolean;
@@ -68,25 +93,38 @@ export type AppConfig = {
   ui_labels: Record<string, string>;
 };
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://127.0.0.1:8000";
+const configuredApiBaseUrl =
+  typeof window !== "undefined"
+    ? new URLSearchParams(window.location.search).get("apiBase")
+    : undefined;
+const API_BASE_URL = normalizeApiBaseUrl(configuredApiBaseUrl ?? import.meta.env.VITE_API_BASE_URL ?? "");
 const USE_MOCK_API =
   import.meta.env.VITE_USE_MOCK_API === "true" ||
   (typeof window !== "undefined" && new URLSearchParams(window.location.search).get("mock") === "1");
+
+export function apiBaseUrlLabel(): string {
+  return API_BASE_URL || "same-origin Vite proxy";
+}
+
+export async function getHealth(): Promise<HealthResponse> {
+  if (USE_MOCK_API) {
+    return { status: "ok", service: "cipp-consultant-agent-dev-api-mock", llm_enabled: false };
+  }
+  return apiFetchJson<HealthResponse>("/api/health", { method: "GET" });
+}
 
 export async function getAppConfig(): Promise<AppConfig> {
   if (USE_MOCK_API) {
     return mockAppConfig();
   }
-  const response = await fetch(`${API_BASE_URL}/api/app-config`);
-  return assertJson(response);
+  return apiFetchJson<AppConfig>("/api/app-config", { method: "GET" });
 }
 
 export async function getSuggestedQuestions(): Promise<SuggestedQuestion[]> {
   if (USE_MOCK_API) {
     return mockSuggestedQuestions();
   }
-  const response = await fetch(`${API_BASE_URL}/api/suggested-questions`);
-  const body = await assertJson<{ questions: SuggestedQuestion[] }>(response);
+  const body = await apiFetchJson<{ questions: SuggestedQuestion[] }>("/api/suggested-questions", { method: "GET" });
   return body.questions;
 }
 
@@ -103,7 +141,7 @@ export async function postAnswer(
   if (accessToken) {
     headers.Authorization = `Bearer ${accessToken}`;
   }
-  const response = await fetch(`${API_BASE_URL}/api/answer`, {
+  return apiFetchJson<AnswerResponse>("/api/answer", {
     method: "POST",
     headers,
     body: JSON.stringify({
@@ -116,15 +154,67 @@ export async function postAnswer(
       }
     })
   });
-  return assertJson(response);
 }
 
-async function assertJson<T>(response: Response): Promise<T> {
+async function apiFetchJson<T>(endpoint: string, init: RequestInit & { method: string }): Promise<T> {
+  const url = buildApiUrl(endpoint);
+  let response: Response;
+  try {
+    response = await fetch(url, init);
+  } catch (err) {
+    throw new ApiClientError(
+      [
+        "API-yhteys epäonnistui.",
+        "Tarkista että backend on käynnissä:",
+        "cipp-run-dev-api --host 127.0.0.1 --port 8000",
+        "",
+        `API base URL: ${apiBaseUrlLabel()}`,
+        `Endpoint: ${endpoint}`,
+        "Pyyntö ei lähtenyt perille tai selain esti sen. Todennäköinen syy on backend offline, väärä portti tai CORS/fetch-ongelma."
+      ].join("\n"),
+      {
+        apiBaseUrl: apiBaseUrlLabel(),
+        endpoint,
+        method: init.method,
+        cause: err instanceof Error ? err.message : String(err)
+      }
+    );
+  }
+  return assertJson(response, endpoint, init.method);
+}
+
+async function assertJson<T>(response: Response, endpoint: string, method: string): Promise<T> {
   if (!response.ok) {
     const text = await response.text();
-    throw new Error(text || `Request failed with status ${response.status}`);
+    throw new ApiClientError(
+      [
+        "API palautti virheen.",
+        `HTTP status: ${response.status}`,
+        `API base URL: ${apiBaseUrlLabel()}`,
+        `Endpoint: ${endpoint}`,
+        text ? `Response body: ${text.slice(0, 800)}` : "Response body: empty"
+      ].join("\n"),
+      {
+        apiBaseUrl: apiBaseUrlLabel(),
+        endpoint,
+        method,
+        status: response.status,
+        responseBody: text
+      }
+    );
   }
   return (await response.json()) as T;
+}
+
+function normalizeApiBaseUrl(value: string): string {
+  return value.trim().replace(/\/+$/g, "");
+}
+
+function buildApiUrl(endpoint: string): string {
+  if (!API_BASE_URL) {
+    return endpoint;
+  }
+  return `${API_BASE_URL}${endpoint}`;
 }
 
 function mockAppConfig(): AppConfig {
