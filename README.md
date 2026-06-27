@@ -27,6 +27,19 @@ Kehitysriippuvuudet:
 
 - `pytest`
 - `ruff`
+- `httpx`
+
+Paikallisen kehitys-API:n riippuvuudet:
+
+- `fastapi`
+- `uvicorn`
+
+Frontend-playgroundin riippuvuudet:
+
+- Node.js 20+
+- Vite
+- React
+- TypeScript
 
 LibreOffice tarvitaan vanhojen Office-tiedostojen muuntamiseen, erityisesti `.doc -> .docx` ja `.xls -> .xlsx`. Ilman LibreOfficea modernit `.docx/.xlsx`-tiedostot voidaan silti purkaa, mutta vanhoista binäärisistä Office-tiedostoista saadaan vain rajallinen best-effort-teksti tai jatkokäsittelymerkintä.
 
@@ -56,6 +69,7 @@ src/cipp_contracts   Python-työkalut importtiin, validointiin, KG:hen ja hakuun
 data/raw             Alkuperäinen aineisto, ei versionhallintaan
 data/extracted       PDF-purku, taulukot ja canonical JSON
 data/reports         Validointi-, PII- ja ekstraktioraportit
+apps/web             Paikallinen React/Vite-playground kyselyiden testaamiseen
 tests                Testit ja eval-kysymykset
 ```
 
@@ -258,3 +272,36 @@ cipp-compose-answer --retrieval-packet data/reports/retrieval_packet.json --outp
 Lähteet näytetään `reference_001`-tyyppisinä anonymisoituina viitteinä. Composer käyttää samoja sanitointisääntöjä kuin retrieval-paketti ja redaktoi esimerkiksi raakadatapolkuja, dokumenttinimiä, henkilötietoja ja varomattomia rahamääriä. `llm_used` on tässä vaiheessa aina `false`.
 
 Jos vastaus perustuu expert guidance -aineistoon, composer näyttää lähdeluokan `expert_guidance` ja lisää epävarmuuden: sitova oikeudellinen tulkinta pitää varmistaa varsinaisesta lakitekstistä, yhtiöjärjestyksestä, sopimuksesta tai asiantuntijalta. Käyttäjälle sopiva muoto on “Oppaan mukaan” tai “Asiantuntijaohjeen perusteella”, ei “laki määrää”.
+
+## Local dev API ja frontend playground
+
+`cipp-run-dev-api` käynnistää paikallisen FastAPI-kehityspalvelun nykyisen retrieval + composer -putken päälle. API ei lisää vapaata LLM-vastausta eikä duplikoi business-logiikkaa. `llm_enabled=false` ja vastaukset perustuvat `cipp-build-retrieval-packet` + `cipp-compose-answer` -kerrokseen.
+
+```powershell
+cipp-run-dev-api --host 127.0.0.1 --port 8000
+```
+
+Endpointit:
+
+- `GET /api/health`
+- `GET /api/app-config`
+- `GET /api/suggested-questions`
+- `POST /api/answer`
+
+Frontend löytyy kansiosta `apps/web`. Se on paikallinen testauskäyttöliittymä, jossa käyttäjä voi säätää taloyhtiön perustietoja, kysyä CIPP-/sukitusurakasta, nähdä lähdeperustaisen vastauksen, puuttuvat tiedot, epävarmuudet ja anonymisoidut lähteet.
+
+```powershell
+cd apps/web
+npm install
+npm run dev
+```
+
+Frontend käyttää oletuksena API:a osoitteessa `http://127.0.0.1:8000`. Asetus löytyy tiedostosta `apps/web/.env.example`:
+
+```env
+VITE_API_BASE_URL=http://127.0.0.1:8000
+```
+
+Yläpalkin parametrit lähetetään jokaisen kysymyksen mukana `user_case`-osiossa: asuntojen määrä, rakennukset, porrashuoneet, JV/SV-pystyviemärit, pohjaviemäri, tonttilinja, sadevesilinjat, kattokaivot, videotarkastus sekä yksikköhinnat/lisätyöt. Ne vaikuttavat siihen, mitä puuttuvia tietoja composer näyttää ja mihin retrieval voi painottaa vastausta.
+
+Referenssiprojektit pysyvät sisäisenä anonymisoituna grounding-aineistona. UI näyttää lähteet `reference_001`-tyyppisinä viitteinä eikä näytä raakadatahakemistoja, luottamuksellisia tiedostonimiä tai oikeita projektinimiä. Debug-paketti on oletuksena pois päältä ja sekin kulkee API:n sanitoinnin läpi.

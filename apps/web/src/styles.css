@@ -1,0 +1,396 @@
+:root {
+  color: #17202a;
+  background: #eef3f6;
+  font-family:
+    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+}
+
+button,
+input,
+textarea {
+  font: inherit;
+}
+
+button {
+  border: 0;
+  cursor: pointer;
+}
+
+.app-shell {
+  width: min(1520px, calc(100% - 32px));
+  margin: 0 auto;
+  padding: 20px 0 32px;
+}
+
+.hero-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 20px 0 16px;
+}
+
+.hero-bar h1 {
+  margin: 2px 0 0;
+  font-size: 30px;
+  font-weight: 760;
+  letter-spacing: 0;
+}
+
+.eyebrow {
+  margin: 0;
+  color: #4f6675;
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.case-bar {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(136px, 1fr));
+  gap: 10px;
+  padding: 12px;
+  margin-bottom: 16px;
+  border: 1px solid #d7e2e8;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 8px 28px rgba(35, 55, 70, 0.06);
+}
+
+.number-field,
+.toggle-field {
+  display: flex;
+  min-height: 56px;
+  flex-direction: column;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 10px;
+  border: 1px solid #e2eaef;
+  border-radius: 8px;
+  background: #f8fbfc;
+}
+
+.number-field span,
+.toggle-field span {
+  color: #5d7280;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.number-field input {
+  width: 100%;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: #17202a;
+  font-size: 20px;
+  font-weight: 720;
+}
+
+.toggle-field {
+  align-items: stretch;
+}
+
+.toggle-field input {
+  width: 34px;
+  height: 20px;
+  accent-color: #1d7f8c;
+}
+
+.workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 390px;
+  gap: 16px;
+  align-items: start;
+}
+
+.conversation,
+.side-panel {
+  display: grid;
+  gap: 14px;
+}
+
+.question-panel,
+.answer-card,
+.panel-card,
+.debug-panel,
+.error-box {
+  border: 1px solid #d7e2e8;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 8px 28px rgba(35, 55, 70, 0.06);
+}
+
+.question-panel {
+  padding: 16px;
+}
+
+.question-panel label {
+  display: block;
+  margin-bottom: 8px;
+  color: #405768;
+  font-weight: 740;
+}
+
+.question-panel textarea {
+  width: 100%;
+  min-height: 132px;
+  resize: vertical;
+  border: 1px solid #cfdee6;
+  border-radius: 8px;
+  outline: 0;
+  padding: 12px;
+  color: #17202a;
+  background: #fbfdfe;
+  line-height: 1.45;
+}
+
+.question-panel textarea:focus {
+  border-color: #1d7f8c;
+  box-shadow: 0 0 0 3px rgba(29, 127, 140, 0.13);
+}
+
+.question-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.question-actions button {
+  padding: 10px 18px;
+  border-radius: 8px;
+  background: #165f6e;
+  color: #ffffff;
+  font-weight: 760;
+}
+
+.question-actions button:disabled {
+  cursor: wait;
+  opacity: 0.7;
+}
+
+.debug-toggle {
+  display: flex !important;
+  align-items: center;
+  gap: 8px;
+  margin: 0 !important;
+  color: #516878;
+  font-size: 13px;
+}
+
+.suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.suggestions button,
+.badge {
+  border: 1px solid #cfe0e8;
+  border-radius: 999px;
+  background: #ffffff;
+  color: #335064;
+  font-size: 12px;
+  font-weight: 740;
+}
+
+.suggestions button {
+  padding: 8px 11px;
+}
+
+.suggestions button:hover {
+  border-color: #1d7f8c;
+  color: #145866;
+}
+
+.answer-card {
+  padding: 20px;
+}
+
+.answer-card.empty,
+.answer-card.muted {
+  color: #607684;
+}
+
+.answer-card h2,
+.panel-card h2 {
+  margin: 0 0 12px;
+  font-size: 18px;
+}
+
+.answer-meta,
+.source-topline,
+.status-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.answer-meta {
+  margin-bottom: 12px;
+}
+
+.answer-meta span {
+  border-radius: 999px;
+  background: #eef6f7;
+  color: #315864;
+  padding: 5px 8px;
+  font-size: 12px;
+  font-weight: 720;
+}
+
+.short-answer {
+  color: #223544;
+  font-size: 16px;
+  line-height: 1.55;
+}
+
+.list-block {
+  margin-top: 18px;
+}
+
+.list-block h3,
+.info-list h3 {
+  margin: 0 0 8px;
+  color: #405768;
+  font-size: 14px;
+}
+
+.list-block li,
+.info-list li {
+  margin-bottom: 7px;
+  line-height: 1.45;
+}
+
+.panel-card,
+.debug-panel {
+  padding: 16px;
+}
+
+.source-list {
+  display: grid;
+  gap: 10px;
+}
+
+.source-item {
+  border: 1px solid #e2eaef;
+  border-radius: 8px;
+  padding: 12px;
+  background: #f8fbfc;
+}
+
+.source-topline {
+  align-items: center;
+  justify-content: space-between;
+}
+
+.source-topline span {
+  color: #315864;
+  font-size: 12px;
+  font-weight: 720;
+}
+
+.source-type,
+.source-confidence,
+.muted-text {
+  color: #657987;
+  font-size: 13px;
+}
+
+.source-item p {
+  overflow-wrap: anywhere;
+}
+
+.status-badges {
+  justify-content: flex-end;
+}
+
+.badge {
+  padding: 6px 9px;
+}
+
+.badge.ok {
+  border-color: #bfe0d8;
+  background: #edf8f5;
+  color: #216b5f;
+}
+
+.badge.warn {
+  border-color: #ead7a2;
+  background: #fff8e6;
+  color: #7a5a12;
+}
+
+.badge.danger {
+  border-color: #edc2c3;
+  background: #fff0f0;
+  color: #8a2d31;
+}
+
+.badge.info,
+.badge.neutral {
+  background: #eef4fb;
+  color: #315a7b;
+}
+
+.debug-panel pre {
+  max-height: 360px;
+  overflow: auto;
+  border-radius: 8px;
+  background: #102231;
+  color: #d6e8ee;
+  padding: 12px;
+  font-size: 12px;
+}
+
+.error-box {
+  padding: 12px 14px;
+  border-color: #edc2c3;
+  background: #fff4f4;
+  color: #8a2d31;
+}
+
+.skeleton {
+  color: #607684;
+}
+
+@media (max-width: 1040px) {
+  .workspace {
+    grid-template-columns: 1fr;
+  }
+
+  .side-panel {
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  .app-shell {
+    width: min(100% - 20px, 1520px);
+    padding-top: 10px;
+  }
+
+  .hero-bar,
+  .question-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .status-badges {
+    justify-content: flex-start;
+  }
+}

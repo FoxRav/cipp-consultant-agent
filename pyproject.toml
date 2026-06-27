@@ -9,8 +9,10 @@ description = "CIPP-sukitusurakoiden sopimuspakettien PostgreSQL/pgvector-pohja"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
+    "fastapi>=0.115",
     "pypdf>=5.0",
     "psycopg[binary]>=3.2",
+    "uvicorn>=0.30",
 ]
 
 [project.optional-dependencies]
@@ -29,6 +31,7 @@ cipp-build-retrieval-packet = "cipp_contracts.retrieve.build_retrieval_packet:ma
 cipp-report-retrieval-smoke-matrix = "cipp_contracts.retrieve.report_retrieval_smoke_matrix:main"
 cipp-compose-answer = "cipp_contracts.answer.compose_answer:main"
 cipp-report-answer-smoke-matrix = "cipp_contracts.answer.report_answer_smoke_matrix:main"
+cipp-run-dev-api = "cipp_contracts.api.dev_server:main"
 cipp-import-legal-guidance-pdf = "cipp_contracts.legal.import_guidance_pdf:main"
 cipp-build-markdown = "cipp_contracts.extract.build_markdown:main"
 cipp-extract-office-text = "cipp_contracts.extract.extract_office_text:main"

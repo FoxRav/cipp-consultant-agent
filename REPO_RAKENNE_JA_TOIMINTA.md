@@ -215,6 +215,7 @@ src/cipp_contracts/
   kg/          PostgreSQL-native knowledge graph -rakentaja
   retrieve/    user-case retrieval packet -rakentaja
   answer/      deterministic source-grounded answer composer
+  api/         paikallinen FastAPI-kehitysrajapinta playgroundille
   price/       JV-urakan hinta-arviolaskenta
   validate/    canonical JSON -validointi
   embed/       varattu embedding-/vektorointikerrokselle
@@ -1190,6 +1191,57 @@ cipp-report-answer-smoke-matrix --output data/reports/answer_smoke_matrix.json -
 ```
 
 Tämä on `v0.6.0`-ehdokkuuden portti. Raportti ei ole agenttivastaus, vaan se tarkistaa että 20 core/guidance-aiheen vastaukset ovat lähdeperustaisia, anonymisoituja, LLM-vapaita ja expert guidance -aineiston osalta ei-sitovasti muotoiltuja.
+
+### `cipp-run-dev-api`
+
+Käynnistää paikallisen FastAPI-kehityspalvelun selain-playgroundia varten.
+
+```powershell
+cipp-run-dev-api --host 127.0.0.1 --port 8000
+```
+
+API:n endpointit ovat:
+
+- `GET /api/health`: palvelun tila, `llm_enabled=false`
+- `GET /api/app-config`: frontendin kentät, oletusarvot, topicit ja UI-labelit
+- `GET /api/suggested-questions`: valmiit testikysymykset core- ja guidance-aiheille
+- `POST /api/answer`: rakentaa retrieval-paketin ja ajaa sen `compose_answer`-funktion läpi
+
+API ei sisällä omaa rinnakkaista CIPP-päättelyä. Se käyttää nykyisiä `retrieve`- ja `answer`-kerroksia ja lisää vain paikallisen HTTP-rajapinnan, request id:n, keston ja viimeisen sanitointivahdin. `include_debug=true` voi palauttaa lyhyen debug-paketin, mutta raakadataa, tiedostopolkuja, oikeita projektinimiä tai henkilötietoja ei pidä palauttaa.
+
+## 19.1 Paikallinen frontend playground
+
+`apps/web` on Vite + React + TypeScript -käyttöliittymä paikalliseen testaukseen. Se ei ole SaaS-tuote eikä sisällä kirjautumista, maksamista, käyttäjähallintaa tai multi-tenant-arkkitehtuuria.
+
+Käynnistys:
+
+```powershell
+cd apps/web
+npm install
+npm run dev
+```
+
+Oletus-API:
+
+```text
+http://127.0.0.1:8000
+```
+
+Frontendin pääosat:
+
+- `apps/web/src/App.tsx`: kokoaa playgroundin tilan, kyselyn ja vastauksen.
+- `apps/web/src/api/client.ts`: kutsuu `/api/app-config`, `/api/suggested-questions` ja `/api/answer`.
+- `apps/web/src/components/TopCaseBar.tsx`: taloyhtiön perustiedot ja toggle-parametrit.
+- `apps/web/src/components/QuestionPanel.tsx`: keskustelumainen kysymyskenttä ja debug-toggle.
+- `apps/web/src/components/AnswerCard.tsx`: lyhyt vastaus, key points, lähteisiin perustuvat huomiot ja jatkokysymykset.
+- `apps/web/src/components/SourcesPanel.tsx`: anonymisoidut lähteet ja sanitisoidut katkelmat.
+- `apps/web/src/components/UncertaintyPanel.tsx`: puuttuvat käyttäjätiedot, epävarmuudet ja varoitukset.
+- `apps/web/src/components/StatusBadges.tsx`: `answered/partial/insufficient_evidence`, `llm_used=false`, `source_grounded` ja `expert_guidance`.
+- `apps/web/src/styles.css`: hillitty moderni käyttöliittymätyyli.
+
+Yläpalkin parametrit lähetetään aina API:iin `user_case`-osiossa. Tällä testataan nopeasti, miten esimerkiksi asuntojen määrä, JV-pystylinjat, pohjaviemäri, tonttilinja, sadevesilinjat, kattokaivot, videotarkastus ja yksikköhinnat vaikuttavat puuttuviin tietoihin, epävarmuuksiin ja retrievalin painotukseen.
+
+Tärkeä rajaus: frontend näyttää vastauksen, jonka source-grounded composer muodostaa. Se ei kutsu LLM:ää eikä saa näyttää referenssiprojektien oikeita nimiä tai raakaa tiedostopolkuja.
 
 ## 20. Tyypillinen uuden projektin käsittely
 
