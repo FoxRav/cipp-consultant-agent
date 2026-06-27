@@ -1238,10 +1238,16 @@ Frontendin pääosat:
 - `apps/web/src/components/UncertaintyPanel.tsx`: puuttuvat käyttäjätiedot, epävarmuudet ja varoitukset.
 - `apps/web/src/components/StatusBadges.tsx`: `answered/partial/insufficient_evidence`, `llm_used=false`, `source_grounded` ja `expert_guidance`.
 - `apps/web/src/styles.css`: hillitty moderni käyttöliittymätyyli.
+- `apps/web/playwright.config.ts`: käynnistää Viten ja ajaa frontend smoke-testin mock API -tilassa.
+- `apps/web/tests/frontend-smoke.spec.ts`: varmistaa selaimessa, että yläpalkki, kysymys, vastaus, lähteet, epävarmuudet, debug ja sanitointi toimivat.
+- `docs/frontend_testing.md`: manuaalinen live API- ja mock API -testauslista.
+- `scripts/run_frontend_dev.ps1`: tulostaa paikallisen backend/frontend-käynnistysohjeen.
 
 Yläpalkin parametrit lähetetään aina API:iin `user_case`-osiossa. Tällä testataan nopeasti, miten esimerkiksi asuntojen määrä, JV-pystylinjat, pohjaviemäri, tonttilinja, sadevesilinjat, kattokaivot, videotarkastus ja yksikköhinnat vaikuttavat puuttuviin tietoihin, epävarmuuksiin ja retrievalin painotukseen.
 
 Tärkeä rajaus: frontend näyttää vastauksen, jonka source-grounded composer muodostaa. Se ei kutsu LLM:ää eikä saa näyttää referenssiprojektien oikeita nimiä tai raakaa tiedostopolkuja.
+
+Mock API -tila käynnistyy joko URL-parametrilla `?mock=1` tai frontendin paikallisella `VITE_USE_MOCK_API=true` -asetuksella. Mock-vastaus on tarkoitettu vain UI:n nopeaan testaukseen; live-testissä käytetään `cipp-run-dev-api`-palvelua ja oikeaa PostgreSQL-tietopohjaa.
 
 ## 20. Tyypillinen uuden projektin käsittely
 

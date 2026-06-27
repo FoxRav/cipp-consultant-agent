@@ -26,7 +26,7 @@ export function QuestionPanel({ question, loading, showDebug, onQuestionChange, 
           <input type="checkbox" checked={showDebug} onChange={(event) => onDebugChange(event.target.checked)} />
           <span>Show debug packet</span>
         </label>
-        <button type="button" onClick={onSubmit} disabled={loading}>
+        <button type="button" onClick={onSubmit} disabled={loading || !question.trim()}>
           {loading ? "Haetaan..." : "Lähetä"}
         </button>
       </div>

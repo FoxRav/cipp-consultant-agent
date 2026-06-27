@@ -305,3 +305,24 @@ VITE_API_BASE_URL=http://127.0.0.1:8000
 Yläpalkin parametrit lähetetään jokaisen kysymyksen mukana `user_case`-osiossa: asuntojen määrä, rakennukset, porrashuoneet, JV/SV-pystyviemärit, pohjaviemäri, tonttilinja, sadevesilinjat, kattokaivot, videotarkastus sekä yksikköhinnat/lisätyöt. Ne vaikuttavat siihen, mitä puuttuvia tietoja composer näyttää ja mihin retrieval voi painottaa vastausta.
 
 Referenssiprojektit pysyvät sisäisenä anonymisoituna grounding-aineistona. UI näyttää lähteet `reference_001`-tyyppisinä viitteinä eikä näytä raakadatahakemistoja, luottamuksellisia tiedostonimiä tai oikeita projektinimiä. Debug-paketti on oletuksena pois päältä ja sekin kulkee API:n sanitoinnin läpi.
+
+Frontendissä on myös mock API -tila nopeaan UI-testaukseen ilman tietokantaa:
+
+```text
+http://127.0.0.1:5173/?mock=1
+```
+
+Automaattinen smoke-testi ajaa saman mock-polun Playwrightilla:
+
+```powershell
+cd apps/web
+npm run test:smoke
+```
+
+Ensimmäisellä konekohtaisella ajolla Playwright voi tarvita Chromiumin:
+
+```powershell
+npx playwright install chromium
+```
+
+Manuaalinen testauslista on tiedostossa [frontend_testing.md](F:/-DEV-/97.cipp-contract-db/docs/frontend_testing.md).
