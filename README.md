@@ -292,6 +292,8 @@ Frontend näyttää API health -tilan badgeissa: `api: ok`, `api: offline` tai `
 
 Frontend löytyy kansiosta `apps/web`. Se on paikallinen testauskäyttöliittymä, jossa käyttäjä voi säätää taloyhtiön perustietoja, kysyä CIPP-/sukitusurakasta, nähdä lähdeperustaisen vastauksen, puuttuvat tiedot, epävarmuudet ja anonymisoidut lähteet.
 
+Frontendin perusnäkymä on yksipalstainen. Erilliset oikean reunan `Lähteet`- ja `Epävarmuudet`-sivupaneelit on poistettu, eikä tyhjiä placeholder-kortteja renderöidä. Lähde-, epävarmuus-, puuttuva tieto- ja varoitusdata säilyy edelleen API-vastauksen JSONissa sekä debug-näkymässä kehittäjän tarkistusta varten.
+
 ```powershell
 cd apps/web
 npm install

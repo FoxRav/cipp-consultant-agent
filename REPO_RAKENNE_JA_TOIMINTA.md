@@ -1241,12 +1241,10 @@ Frontendin pääosat:
 - `apps/web/src/components/TopCaseBar.tsx`: taloyhtiön perustiedot ja näkyvät numeric-case-parametrit.
 - `apps/web/src/components/QuestionPanel.tsx`: keskustelumainen kysymyskenttä ja debug-toggle.
 - `apps/web/src/components/AnswerCard.tsx`: lyhyt vastaus, key points, hintakysymyksen case-yhteenveto, lähteisiin perustuvat huomiot ja jatkokysymykset.
-- `apps/web/src/components/SourcesPanel.tsx`: anonymisoidut lähteet ja sanitisoidut katkelmat.
-- `apps/web/src/components/UncertaintyPanel.tsx`: puuttuvat käyttäjätiedot, epävarmuudet ja varoitukset.
 - `apps/web/src/components/StatusBadges.tsx`: `answered/partial/insufficient_evidence`, `llm_used=false`, `source_grounded` ja `expert_guidance`.
 - `apps/web/src/styles.css`: hillitty moderni käyttöliittymätyyli.
 - `apps/web/playwright.config.ts`: käynnistää Viten ja ajaa frontend smoke-testin mock API -tilassa.
-- `apps/web/tests/frontend-smoke.spec.ts`: varmistaa selaimessa, että yläpalkki, kysymys, vastaus, lähteet, epävarmuudet, debug ja sanitointi toimivat.
+- `apps/web/tests/frontend-smoke.spec.ts`: varmistaa selaimessa, että yläpalkki, kysymys, vastaus, debug, sanitointi ja poistettujen tyhjien paneelien puuttuminen toimivat.
 - `docs/frontend_testing.md`: manuaalinen live API- ja mock API -testauslista.
 - `docs/supabase_auth_plan.md`: Supabase-authin rajaus, adapteripäätös ja seuraavat turvalliset askeleet.
 - `scripts/run_frontend_dev.ps1`: tulostaa paikallisen backend/frontend-käynnistysohjeen.
@@ -1260,6 +1258,8 @@ Selain tallentaa case-tilan versionoidusti localStorageen. Jos `cipp_user_case_s
 Hintakysymykset kuten `Paljonko yllä kuvatun taloyhtiön urakka maksaa?` tunnistetaan `cost_estimate`-topiciksi erillään maksueristä. Composer käyttää silloin yläpalkin nykyistä casea, palauttaa `case_used`-kentän ja näyttää kustannusajurit. Jos retrieval-paketissa ei ole riittävää anonymisoitua hintadataa, vastaus on `insufficient_evidence`: se ei keksi euromäärää, vaan listaa puuttuvat tiedot kuten urakkarajat, käyttöveden kuulumisen, kylpyhuoneiden/lattiakaivojen määrän, todelliset linjapituudet, kaivojen määrän, laadunvarmistusvaatimukset ja suunnitelmien tason.
 
 Tärkeä rajaus: frontend näyttää vastauksen, jonka source-grounded composer muodostaa. Se ei kutsu LLM:ää eikä saa näyttää referenssiprojektien oikeita nimiä tai raakaa tiedostopolkuja.
+
+Frontendin perusnäkymä on yksipalstainen. Erilliset oikean reunan `Lähteet`- ja `Epävarmuudet`-kortit on poistettu, eikä tyhjiä placeholder-kortteja renderöidä. Lähteet, epävarmuudet, puuttuvat tiedot ja varoitukset säilyvät API-vastauksen JSONissa ja debug-näkymässä, mutta niitä ei näytetä erillisinä tyhjinä sivupaneeleina.
 
 Mock API -tila käynnistyy joko URL-parametrilla `?mock=1` tai frontendin paikallisella `VITE_USE_MOCK_API=true` -asetuksella. Mock-vastaus on tarkoitettu vain UI:n nopeaan testaukseen; live-testissä käytetään `cipp-run-dev-api`-palvelua ja oikeaa PostgreSQL-tietopohjaa.
 

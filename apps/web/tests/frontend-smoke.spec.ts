@@ -7,6 +7,10 @@ test("frontend playground works with mock API", async ({ page }) => {
   await expect(page.getByText("api: ok")).toBeVisible();
   await expect(page.getByLabel("Auth prototype")).toBeVisible();
   await expect(page.getByText("Mock auth")).toBeVisible();
+  await expect(page.getByLabel("Kysy CIPP-/sukitusurakasta")).toHaveValue(
+    "Kuinka paljon yllä asetettu taloyhtiön sukitusurakka maksaa?"
+  );
+  await expectRemovedSidePanels(page);
   await page.getByLabel("Auth email").fill("board@example.test");
   await page.getByLabel("Auth password").fill("local-password");
   await page.getByRole("button", { name: "Login" }).click();
@@ -65,10 +69,7 @@ test("frontend playground works with mock API", async ({ page }) => {
   await expect(caseUsed.getByText("6", { exact: true })).toBeVisible();
   await expect(page.getByText("4 SV-pystyviemäriä ja 6 kattokaivoa")).toBeVisible();
   await expect(page.getByText("llm_used=false")).toBeVisible();
-  const sourcesPanel = page.getByRole("heading", { name: "Lähteet" }).locator("..");
-  await expect(page.getByRole("heading", { name: "Lähteet" })).toBeVisible();
-  await expect(sourcesPanel.getByText("reference_001", { exact: true })).toBeVisible();
-  await expect(page.getByRole("heading", { level: 2, name: "Epävarmuudet" })).toBeVisible();
+  await expectRemovedSidePanels(page);
 
   await expect(page.locator(".debug-panel summary")).toHaveText("Show debug packet");
   await page.locator(".debug-panel summary").click();
@@ -106,6 +107,7 @@ test("frontend resets stale localStorage case state", async ({ page }) => {
 
   await expectDefaultCase(page);
   await expectRemovedControls(page);
+  await expectRemovedSidePanels(page);
 });
 
 test("frontend shows actionable diagnostics when API is offline", async ({ page }) => {
@@ -145,4 +147,13 @@ async function expectRemovedControls(page: import("@playwright/test").Page) {
   await expect(page.getByText("Videotarkastus")).toHaveCount(0);
   await expect(page.getByText("Yksikköhinnat / lisätyöt")).toHaveCount(0);
   await expect(page.getByText("Lisätyöt")).toHaveCount(0);
+}
+
+async function expectRemovedSidePanels(page: import("@playwright/test").Page) {
+  await expect(page.getByText("Lähteet")).toHaveCount(0);
+  await expect(page.getByText("Ei vielä lähteitä.")).toHaveCount(0);
+  await expect(page.getByText("Epävarmuudet")).toHaveCount(0);
+  await expect(page.getByText("Puuttuvat tiedot")).toHaveCount(0);
+  await expect(page.getByText("Varoitukset")).toHaveCount(0);
+  await expect(page.getByText("Ei merkintöjä.")).toHaveCount(0);
 }

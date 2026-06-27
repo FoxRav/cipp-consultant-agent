@@ -17,11 +17,9 @@ import type { AuthSession } from "./auth/types";
 import { AnswerCard } from "./components/AnswerCard";
 import { AuthPanel } from "./components/AuthPanel";
 import { QuestionPanel } from "./components/QuestionPanel";
-import { SourcesPanel } from "./components/SourcesPanel";
 import { StatusBadges } from "./components/StatusBadges";
 import { SuggestedQuestions } from "./components/SuggestedQuestions";
 import { TopCaseBar } from "./components/TopCaseBar";
-import { UncertaintyPanel } from "./components/UncertaintyPanel";
 import {
   DEFAULT_USER_CASE,
   loadInitialUserCase,
@@ -34,7 +32,7 @@ export default function App() {
   const [config, setConfig] = useState<AppConfig | null>(null);
   const [suggestions, setSuggestions] = useState<SuggestedQuestion[]>([]);
   const [userCase, setUserCaseState] = useState<UserCase>(() => loadInitialUserCase());
-  const [question, setQuestion] = useState("Mitä maksueristä kannattaa sopia CIPP-sukitusurakassa?");
+  const [question, setQuestion] = useState("Kuinka paljon yllä asetettu taloyhtiön sukitusurakka maksaa?");
   const [showDebug, setShowDebug] = useState(false);
   const [answer, setAnswer] = useState<AnswerResponse | null>(null);
   const [session, setSession] = useState<AuthSession | null>(null);
@@ -133,22 +131,13 @@ export default function App() {
             </div>
           ) : null}
           <AnswerCard answer={answer} loading={loading} />
-        </div>
-
-        <aside className="side-panel">
-          <SourcesPanel sources={answer?.sources ?? []} />
-          <UncertaintyPanel
-            uncertainties={answer?.uncertainties ?? []}
-            missingFields={answer?.missing_user_case_fields ?? []}
-            warnings={answer?.warnings ?? []}
-          />
           {showDebug && answer ? (
             <details className="debug-panel">
               <summary>Show debug packet</summary>
               <pre>{JSON.stringify({ debug: answer.debug, retrieval_packet: answer.retrieval_packet }, null, 2)}</pre>
             </details>
           ) : null}
-        </aside>
+        </div>
       </section>
     </main>
   );

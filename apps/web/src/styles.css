@@ -29,7 +29,7 @@ button {
 }
 
 .app-shell {
-  width: min(1520px, calc(100% - 32px));
+  width: min(1320px, calc(100% - 32px));
   margin: 0 auto;
   padding: 20px 0 32px;
 }
@@ -124,14 +124,10 @@ button {
 }
 
 .workspace {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 390px;
-  gap: 16px;
-  align-items: start;
+  display: block;
 }
 
-.conversation,
-.side-panel {
+.conversation {
   display: grid;
   gap: 14px;
 }
@@ -333,38 +329,9 @@ button {
   padding: 16px;
 }
 
-.source-list {
-  display: grid;
-  gap: 10px;
-}
-
-.source-item {
-  border: 1px solid #e2eaef;
-  border-radius: 8px;
-  padding: 12px;
-  background: #f8fbfc;
-}
-
-.source-topline {
-  align-items: center;
-  justify-content: space-between;
-}
-
-.source-topline span {
-  color: #315864;
-  font-size: 12px;
-  font-weight: 720;
-}
-
-.source-type,
-.source-confidence,
 .muted-text {
   color: #657987;
   font-size: 13px;
-}
-
-.source-item p {
-  overflow-wrap: anywhere;
 }
 
 .status-badges {
@@ -490,16 +457,6 @@ button {
 
 .skeleton {
   color: #607684;
-}
-
-@media (max-width: 1040px) {
-  .workspace {
-    grid-template-columns: 1fr;
-  }
-
-  .side-panel {
-    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  }
 }
 
 @media (max-width: 720px) {

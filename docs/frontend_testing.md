@@ -63,6 +63,8 @@ Perusnäkymässä ei näytetä `Videotarkastus`- eikä `Yksikköhinnat / lisäty
 - ei Windows-polkuja
 - ei oikeita projektinimiä
 - debug toggle toimii
+- erillistä oikean reunan lähde-/epävarmuuspaneelia ei näy
+- tyhjät placeholderit kuten `Ei vielä lähteitä.` ja `Ei merkintöjä.` eivät näy
 
 Hintakysymyksessä tarkista lisäksi:
 
@@ -110,7 +112,9 @@ Aja smoke:
 npm run test:smoke
 ```
 
-Smoke käyttää mock API -tilaa URL-parametrilla `?mock=1&resetCase=1`. Testi varmistaa, että yläpalkin case-parametrit näkyvät, poistetut perusnäkymän kentät ja topic-chipit eivät näy, arvoja voi muuttaa, reset palauttaa keskitetyn default-casen, hintakysymyksen voi lähettää, vastaus ja lähteet ilmestyvät, case-yhteenveto näkyy, debug-näkymä avautuu ja UI:ssa ei näy Windows-polkuja tai luottamuksellisia dokumenttipäätteitä.
+Smoke käyttää mock API -tilaa URL-parametrilla `?mock=1&resetCase=1`. Testi varmistaa, että yläpalkin case-parametrit näkyvät, poistetut perusnäkymän kentät ja topic-chipit eivät näy, arvoja voi muuttaa, reset palauttaa keskitetyn default-casen, hintakysymyksen voi lähettää, vastaus ilmestyy, case-yhteenveto näkyy, debug-näkymä avautuu, erilliset lähde-/epävarmuuspaneelit eivät näy ja UI:ssa ei näy Windows-polkuja tai luottamuksellisia dokumenttipäätteitä.
+
+Perusnäkymä on yksipalstainen. Erilliset `Lähteet`- ja `Epävarmuudet`-sivupaneelit sekä niiden tyhjät placeholder-tekstit on poistettu. API-vastauksen lähde-, epävarmuus-, puuttuva tieto- ja varoitusdata säilyy JSONissa ja debug-näkymässä.
 
 Smoke sisältää myös vanhan localStorage-tilan regression: jos selaimessa on vanha `cipp_user_case`, jossa SV-pystyviemärit, kattokaivot tai sadevesilinjat ovat nollia, schema-version mismatch poistaa vanhan tilan ja palauttaa arvot `4`, `4` ja `30`.
 

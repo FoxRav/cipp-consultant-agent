@@ -30,7 +30,7 @@ export function AnswerCard({ answer, loading }: Props) {
       <CaseUsed caseUsed={answer.case_used} />
       <ListBlock title="Keskeiset huomiot" values={answer.key_points} ordered />
       <ListBlock title="Kustannusajurit" values={answer.cost_drivers ?? []} />
-      <ListBlock title="Puuttuvat tiedot" values={answer.missing_information ?? []} />
+      <ListBlock title="Tarkennettavat tiedot" values={answer.missing_information ?? []} />
       <ListBlock title="Lähteiden tukemat muistiinpanot" values={answer.source_based_notes} />
       <ListBlock title="Seuraavat tarkentavat kysymykset" values={answer.recommended_next_questions} />
     </section>
