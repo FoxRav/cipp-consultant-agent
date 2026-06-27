@@ -54,8 +54,12 @@ def answer_payload() -> dict[str, object]:
             "apartments_count": 30,
             "buildings_count": 1,
             "staircases_count": 3,
-            "jv_verticals_count": 8,
-            "sv_verticals_count": 2,
+            "jv_verticals_count": 15,
+            "sv_verticals_count": 4,
+            "roof_drains_count": 4,
+            "bottom_drain_length_m": 50,
+            "yard_line_length_m": 30,
+            "stormwater_line_length_m": 30,
             "includes_bottom_drain": True,
             "includes_yard_line": False,
             "includes_stormwater": False,
@@ -86,6 +90,9 @@ def test_app_config_returns_user_case_fields() -> None:
     assert body["environment"] == "local_dev"
     assert body["llm_enabled"] is False
     assert any(field["name"] == "apartments_count" for field in body["user_case_fields"])
+    defaults = body["defaults"]
+    assert defaults["sv_verticals_count"] == 4
+    assert defaults["roof_drains_count"] == defaults["sv_verticals_count"]
 
 
 def test_suggested_questions_returns_core_questions() -> None:
@@ -121,7 +128,9 @@ def test_user_case_parameters_are_passed_to_composer() -> None:
 
     assert response.status_code == 200
     assert captured[0]["apartments_count"] == 30
-    assert captured[0]["jv_verticals_count"] == 8
+    assert captured[0]["jv_verticals_count"] == 15
+    assert captured[0]["sv_verticals_count"] == 4
+    assert captured[0]["roof_drains_count"] == 4
     assert captured[0]["includes_bottom_drain"] is True
 
 

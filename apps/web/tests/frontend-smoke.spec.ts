@@ -11,9 +11,9 @@ test("frontend playground works with mock API", async ({ page }) => {
     "Porrashuoneita",
     "JV-pystyviemäreitä",
     "SV-pystyviemäreitä",
-    "Pohjaviemäri",
-    "Tonttilinja",
-    "Sadevesilinjat",
+    "Pohjaviemäri m",
+    "Tonttilinja m",
+    "Sadevesilinjat m",
     "Kattokaivot",
     "Videotarkastus",
     "Yksikköhinnat / lisätyöt"
@@ -31,12 +31,21 @@ test("frontend playground works with mock API", async ({ page }) => {
   await jvVerticals.fill("11");
   await expect(jvVerticals).toHaveValue("11");
 
-  const bottomDrain = page.getByLabel("Pohjaviemäri");
-  if (await bottomDrain.isChecked()) {
-    await bottomDrain.click();
-  }
-  await bottomDrain.click();
-  await expect(bottomDrain).toBeChecked();
+  const svVerticals = page.getByLabel("SV-pystyviemäreitä");
+  await expect(svVerticals).toHaveValue("4");
+
+  const roofDrains = page.getByLabel("Kattokaivot");
+  await expect(roofDrains).toHaveValue("4");
+  await roofDrains.fill("6");
+  await expect(roofDrains).toHaveValue("6");
+
+  await page.getByRole("button", { name: "Reset defaults" }).click();
+  await expect(svVerticals).toHaveValue("4");
+  await expect(roofDrains).toHaveValue("4");
+
+  await apartments.fill("42");
+  await jvVerticals.fill("11");
+  await roofDrains.fill("6");
 
   await page.getByLabel("Kysy CIPP-/sukitusurakasta").fill(
     "Mitä pitää huomioida taloyhtiön JV-pystylinjojen ja pohjaviemärin sukituksessa?"
@@ -45,6 +54,7 @@ test("frontend playground works with mock API", async ({ page }) => {
   await page.getByRole("button", { name: "Lähetä" }).click();
 
   await expect(page.getByRole("heading", { name: "Vastaus" })).toBeVisible();
+  await expect(page.getByText("4 SV-pystyviemäriä ja 6 kattokaivoa")).toBeVisible();
   await expect(page.getByText("llm_used=false")).toBeVisible();
   const sourcesPanel = page.getByRole("heading", { name: "Lähteet" }).locator("..");
   await expect(page.getByRole("heading", { name: "Lähteet" })).toBeVisible();

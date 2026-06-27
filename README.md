@@ -302,7 +302,9 @@ Frontend käyttää oletuksena API:a osoitteessa `http://127.0.0.1:8000`. Asetus
 VITE_API_BASE_URL=http://127.0.0.1:8000
 ```
 
-Yläpalkin parametrit lähetetään jokaisen kysymyksen mukana `user_case`-osiossa: asuntojen määrä, rakennukset, porrashuoneet, JV/SV-pystyviemärit, pohjaviemäri, tonttilinja, sadevesilinjat, kattokaivot, videotarkastus sekä yksikköhinnat/lisätyöt. Ne vaikuttavat siihen, mitä puuttuvia tietoja composer näyttää ja mihin retrieval voi painottaa vastausta.
+Yläpalkin parametrit lähetetään jokaisen kysymyksen mukana `user_case`-osiossa: asuntojen määrä, rakennukset, porrashuoneet, JV/SV-pystyviemärit, kattokaivot, pohjaviemärin pituus, tonttilinjan pituus, sadevesilinjojen pituus, videotarkastus sekä yksikköhinnat/lisätyöt. Ne vaikuttavat siihen, mitä puuttuvia tietoja composer näyttää ja mihin retrieval voi painottaa vastausta.
+
+Frontendin oletuscase on: `apartments_count=30`, `buildings_count=1`, `staircases_count=3`, `jv_verticals_count=15`, `sv_verticals_count=4`, `roof_drains_count=4`, `bottom_drain_length_m=50`, `yard_line_length_m=30` ja `stormwater_line_length_m=30`. Kattokaivojen oletusarvo johdetaan SV-pystyviemäreiden oletusarvosta, eli oletuksena molemmat ovat 4. Käyttäjä voi silti muuttaa `roof_drains_count`-arvoa erikseen, jos kohteessa kattokaivojen määrä poikkeaa SV-pystyviemäreiden määrästä.
 
 Referenssiprojektit pysyvät sisäisenä anonymisoituna grounding-aineistona. UI näyttää lähteet `reference_001`-tyyppisinä viitteinä eikä näytä raakadatahakemistoja, luottamuksellisia tiedostonimiä tai oikeita projektinimiä. Debug-paketti on oletuksena pois päältä ja sekin kulkee API:n sanitoinnin läpi.
 

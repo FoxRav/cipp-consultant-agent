@@ -4,6 +4,10 @@ export type UserCase = {
   staircases_count: number;
   jv_verticals_count: number;
   sv_verticals_count: number;
+  roof_drains_count: number;
+  bottom_drain_length_m: number;
+  yard_line_length_m: number;
+  stormwater_line_length_m: number;
   includes_bottom_drain: boolean;
   includes_yard_line: boolean;
   includes_stormwater: boolean;
@@ -126,8 +130,12 @@ function mockAppConfig(): AppConfig {
       apartments_count: 30,
       buildings_count: 1,
       staircases_count: 3,
-      jv_verticals_count: 8,
-      sv_verticals_count: 2,
+      jv_verticals_count: 15,
+      sv_verticals_count: 4,
+      roof_drains_count: 4,
+      bottom_drain_length_m: 50,
+      yard_line_length_m: 30,
+      stormwater_line_length_m: 30,
       includes_bottom_drain: true,
       includes_yard_line: false,
       includes_stormwater: false,
@@ -139,12 +147,12 @@ function mockAppConfig(): AppConfig {
       { name: "apartments_count", label: "Asuntoja", type: "number", default: 30 },
       { name: "buildings_count", label: "Rakennuksia", type: "number", default: 1 },
       { name: "staircases_count", label: "Porrashuoneita", type: "number", default: 3 },
-      { name: "jv_verticals_count", label: "JV-pystyviemäreitä", type: "number", default: 8 },
-      { name: "sv_verticals_count", label: "SV-pystyviemäreitä", type: "number", default: 2 },
-      { name: "includes_bottom_drain", label: "Pohjaviemäri", type: "boolean", default: true },
-      { name: "includes_yard_line", label: "Tonttilinja", type: "boolean", default: false },
-      { name: "includes_stormwater", label: "Sadevesilinjat", type: "boolean", default: false },
-      { name: "includes_roof_drains", label: "Kattokaivot", type: "boolean", default: false },
+      { name: "jv_verticals_count", label: "JV-pystyviemäreitä", type: "number", default: 15 },
+      { name: "sv_verticals_count", label: "SV-pystyviemäreitä", type: "number", default: 4 },
+      { name: "roof_drains_count", label: "Kattokaivot", type: "number", default: 4 },
+      { name: "bottom_drain_length_m", label: "Pohjaviemäri m", type: "number", default: 50 },
+      { name: "yard_line_length_m", label: "Tonttilinja m", type: "number", default: 30 },
+      { name: "stormwater_line_length_m", label: "Sadevesilinjat m", type: "number", default: 30 },
       { name: "includes_video_inspection", label: "Videotarkastus", type: "boolean", default: true },
       { name: "includes_unit_prices", label: "Yksikköhinnat / lisätyöt", type: "boolean", default: true }
     ],
@@ -204,7 +212,7 @@ async function mockAnswer(question: string, userCase: UserCase, includeDebug: bo
     short_answer:
       "Mock-tila muodostaa turvallisen esimerkkivastauksen: tarkista urakan laajuus, maksuerien hyväksyntä, videotarkastus ja puuttuvat kohdetiedot ennen tarjouspyyntöä.",
     key_points: [
-      `Kohteessa on testiarvona ${userCase.apartments_count} asuntoa ja ${userCase.jv_verticals_count} JV-pystyviemäriä.`,
+      `Kohteessa on testiarvona ${userCase.apartments_count} asuntoa, ${userCase.jv_verticals_count} JV-pystyviemäriä, ${userCase.sv_verticals_count} SV-pystyviemäriä ja ${userCase.roof_drains_count} kattokaivoa.`,
       "Pohjaviemärin ja tonttilinjan kuuluminen urakkaan kannattaa kirjata erikseen.",
       "Videotarkastus ja valvojan kommentit kannattaa sitoa vastaanottoon ja takuuajan seurantaan."
     ],

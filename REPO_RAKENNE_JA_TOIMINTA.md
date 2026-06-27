@@ -1243,7 +1243,9 @@ Frontendin pääosat:
 - `docs/frontend_testing.md`: manuaalinen live API- ja mock API -testauslista.
 - `scripts/run_frontend_dev.ps1`: tulostaa paikallisen backend/frontend-käynnistysohjeen.
 
-Yläpalkin parametrit lähetetään aina API:iin `user_case`-osiossa. Tällä testataan nopeasti, miten esimerkiksi asuntojen määrä, JV-pystylinjat, pohjaviemäri, tonttilinja, sadevesilinjat, kattokaivot, videotarkastus ja yksikköhinnat vaikuttavat puuttuviin tietoihin, epävarmuuksiin ja retrievalin painotukseen.
+Yläpalkin parametrit lähetetään aina API:iin `user_case`-osiossa. Tällä testataan nopeasti, miten esimerkiksi asuntojen määrä, JV-pystylinjat, SV-pystylinjat, kattokaivojen määrä, pohjaviemärin pituus, tonttilinjan pituus, sadevesilinjojen pituus, videotarkastus ja yksikköhinnat vaikuttavat puuttuviin tietoihin, epävarmuuksiin ja retrievalin painotukseen.
+
+Frontendin oletusarvoissa `sv_verticals_count=4` ja `roof_drains_count=4`. Kattokaivojen oletusarvo johdetaan SV-pystyviemäreiden oletusarvosta, koska kattokaivot liittyvät sadevesipuolen pystylinjoihin. Tämä on vain oletus: käyttäjä voi muuttaa kattokaivojen määrää erikseen, jos kohteessa kattokaivojen ja SV-pystyviemäreiden määrät eivät vastaa toisiaan. Reset defaults palauttaa molemmat takaisin arvoon 4.
 
 Tärkeä rajaus: frontend näyttää vastauksen, jonka source-grounded composer muodostaa. Se ei kutsu LLM:ää eikä saa näyttää referenssiprojektien oikeita nimiä tai raakaa tiedostopolkuja.
 

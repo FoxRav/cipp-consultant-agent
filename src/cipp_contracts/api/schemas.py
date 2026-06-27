@@ -13,6 +13,10 @@ class UserCase(BaseModel):
     staircases_count: int | None = Field(default=None, ge=0)
     jv_verticals_count: int | None = Field(default=None, ge=0)
     sv_verticals_count: int | None = Field(default=None, ge=0)
+    roof_drains_count: int | None = Field(default=None, ge=0)
+    bottom_drain_length_m: int | None = Field(default=None, ge=0)
+    yard_line_length_m: int | None = Field(default=None, ge=0)
+    stormwater_line_length_m: int | None = Field(default=None, ge=0)
     includes_bottom_drain: bool | None = None
     includes_yard_line: bool | None = None
     includes_stormwater: bool | None = None
@@ -56,4 +60,3 @@ class AppConfigResponse(BaseModel):
     defaults: dict[str, Any]
     topics: list[dict[str, str]]
     ui_labels: dict[str, str]
-

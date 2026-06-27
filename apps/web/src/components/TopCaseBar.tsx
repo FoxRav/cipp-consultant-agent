@@ -4,9 +4,10 @@ type Props = {
   fields: AppConfig["user_case_fields"];
   userCase: UserCase;
   onChange: (value: UserCase) => void;
+  onReset: () => void;
 };
 
-export function TopCaseBar({ fields, userCase, onChange }: Props) {
+export function TopCaseBar({ fields, userCase, onChange, onReset }: Props) {
   if (!fields.length) {
     return <section className="case-bar skeleton">Ladataan kohdeparametreja...</section>;
   }
@@ -41,6 +42,9 @@ export function TopCaseBar({ fields, userCase, onChange }: Props) {
           </label>
         );
       })}
+      <button className="reset-defaults" type="button" onClick={onReset}>
+        Reset defaults
+      </button>
     </section>
   );
 }

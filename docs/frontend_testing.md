@@ -39,12 +39,14 @@ Mitä amatööritoimijan pitää ymmärtää ennen kuin taloyhtiö pyytää urak
 - rakennusten määrä
 - JV-pystyviemärit
 - SV-pystyviemärit
-- pohjaviemäri kyllä/ei
-- tonttilinja kyllä/ei
-- sadevesilinjat kyllä/ei
-- kattokaivot kyllä/ei
+- kattokaivot
+- pohjaviemärin pituus
+- tonttilinjan pituus
+- sadevesilinjojen pituus
 - videotarkastus kyllä/ei
 - yksikköhinnat kyllä/ei
+
+Oletuksena `SV-pystyviemäreitä = 4` ja `Kattokaivot = 4`. Kattokaivojen oletusarvo johdetaan SV-pystyviemäreiden oletusarvosta, koska kattokaivot liittyvät sadevesipuolen pystylinjoihin. Käyttäjä voi muuttaa kattokaivojen määrää erikseen, jos kohteen todellinen tilanne poikkeaa oletuksesta.
 
 6. Tarkista jokaisessa vastauksessa:
 

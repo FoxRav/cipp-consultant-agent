@@ -12,8 +12,12 @@ const fallbackDefaults: UserCase = {
   apartments_count: 30,
   buildings_count: 1,
   staircases_count: 3,
-  jv_verticals_count: 8,
-  sv_verticals_count: 2,
+  jv_verticals_count: 15,
+  sv_verticals_count: 4,
+  roof_drains_count: 4,
+  bottom_drain_length_m: 50,
+  yard_line_length_m: 30,
+  stormwater_line_length_m: 30,
   includes_bottom_drain: true,
   includes_yard_line: false,
   includes_stormwater: false,
@@ -45,6 +49,7 @@ export default function App() {
   }, []);
 
   const fields = useMemo(() => config?.user_case_fields ?? [], [config]);
+  const defaults = useMemo(() => ({ ...fallbackDefaults, ...(config?.defaults ?? {}) }), [config]);
 
   async function submit(nextQuestion = question) {
     if (!nextQuestion.trim()) {
@@ -72,7 +77,7 @@ export default function App() {
         <StatusBadges answer={answer} llmEnabled={config?.llm_enabled ?? false} />
       </header>
 
-      <TopCaseBar fields={fields} userCase={userCase} onChange={setUserCase} />
+      <TopCaseBar fields={fields} userCase={userCase} onChange={setUserCase} onReset={() => setUserCase(defaults)} />
 
       <section className="workspace">
         <div className="conversation">

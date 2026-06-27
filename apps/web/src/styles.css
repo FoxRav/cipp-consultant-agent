@@ -70,7 +70,8 @@ button {
 }
 
 .number-field,
-.toggle-field {
+.toggle-field,
+.reset-defaults {
   display: flex;
   min-height: 56px;
   flex-direction: column;
@@ -107,6 +108,13 @@ button {
   width: 34px;
   height: 20px;
   accent-color: #1d7f8c;
+}
+
+.reset-defaults {
+  align-items: center;
+  color: #315864;
+  font-weight: 760;
+  border: 1px solid #cfe0e8;
 }
 
 .workspace {
